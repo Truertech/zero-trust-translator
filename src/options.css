@@ -1,0 +1,35 @@
+/* Board 18 of #3797 (the options page) and the unlock tab. Loaded after popup.css. */
+body { background: #F7F6F2; }
+.btn { white-space: nowrap; }
+.page { min-height: 100vh; padding: 32px 24px; box-sizing: border-box; }
+.wrap { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+.top { display: flex; align-items: center; gap: 12px; }
+.top .logo { width: 36px; height: 36px; border-radius: 10px; }
+.top h1 { margin: 0; font-size: 22px; }
+.top .sub { font-size: 13px; color: #57606A; }
+.on { font-size: 12px; font-weight: 600; color: #0B4F49; background: #E6F2EF; border-radius: 999px; padding: 3px 10px; }
+.on.off { color: #454B54; background: #F2F1EC; }
+.card { background: #fff; border: 1px solid #E6E4DE; border-radius: 14px; padding: 4px 20px; }
+.h { font-size: 13px; font-weight: 600; color: #30353C; text-transform: uppercase; letter-spacing: .04em; margin: 0 0 8px; }
+.r { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 14px 0; border-bottom: 1px solid #EFEDE8; }
+.r:last-child { border-bottom: 0; }
+.r .ic { width: 36px; height: 36px; border-radius: 10px; }
+.t { flex: 1 1 220px; min-width: 0; }
+.t b { display: block; font-size: 14px; }
+.t span { font-size: 13px; color: #57606A; }
+.sw { width: 40px; height: 24px; border-radius: 999px; background: #D5D2CA; position: relative; border: 0; cursor: pointer; flex: none; padding: 0; }
+.sw[aria-pressed="true"] { background: #0F766E; }
+.sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; }
+.sw[aria-pressed="true"]::after { left: auto; right: 3px; }
+select.btn { padding: 0 10px; }
+.panel { flex: 1 1 100%; display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: 12px; background: #F7F6F2; border: 1px solid #E6E4DE; }
+.panel .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.panel .f { max-width: 360px; }
+.panel .p { font-size: 13px; color: #30353C; }
+.panel .codes { max-width: 360px; }
+.panel.reauth { background: #FFF8EB; border-color: #F3D9A8; }
+.msg { font-size: 13px; color: #0B4F49; }
+
+.solo { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; box-sizing: border-box; }
+.solo .box { width: 380px; background: #fff; border: 1px solid #E6E4DE; border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
+.solo .centre { padding: 32px 24px 24px; }

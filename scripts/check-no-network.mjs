@@ -3,8 +3,12 @@
 // `<dir>` for the network APIs and for a remote URL: the content.js and
 // popup.js bundles, which are the only files this extension executes.
 // `manifest.json` (whose `matches` field names the app's own origins by
-// design) and `popup.html` (whose footer links to the source repository)
-// are read, not run, so they are not scanned.
+// design) is read, not run, so it is not scanned.
+//
+// #3797: the `.css` and `.html` pages are scanned for a remote URL too, so
+// no remote font, image, stylesheet or script gets in. The one remote
+// address a page may hold is the `href` of an `<a>` link (the source and
+// release links), which the browser follows only when the admin clicks it.
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { extname, join } from 'node:path';
 
@@ -12,7 +16,8 @@ const FORBIDDEN_TOKENS = ['fetch(', 'XMLHttpRequest', 'WebSocket', 'EventSource'
 // A remote URL in the bundle text. `localhost`/`127.0.0.1` are not remote,
 // so the dev-build content script match and any test fixture are allowed.
 const REMOTE_URL = /https?:\/\/(?!localhost|127\.0\.0\.1)[^\s"'`)]+/;
-const SCANNED_EXTENSIONS = new Set(['.js', '.mjs']);
+const SCANNED_EXTENSIONS = new Set(['.js', '.mjs', '.css', '.html']);
+const ANCHOR_TAG = /<a\s[^>]*>/gi;
 
 function collectFiles(dir) {
   const out = [];
@@ -36,8 +41,10 @@ function main() {
   }
   const problems = [];
   for (const file of collectFiles(dir)) {
-    const text = readFileSync(file, 'utf8');
-    for (const token of FORBIDDEN_TOKENS) {
+    const raw = readFileSync(file, 'utf8');
+    const isPage = extname(file) === '.html';
+    const text = isPage ? raw.replace(ANCHOR_TAG, '<a>') : raw;
+    for (const token of isPage || extname(file) === '.css' ? [] : FORBIDDEN_TOKENS) {
       if (text.includes(token)) {
         problems.push(`${file}: contains "${token}"`);
       }

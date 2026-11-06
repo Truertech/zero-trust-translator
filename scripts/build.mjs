@@ -62,22 +62,28 @@ function main() {
   rmSync(outDir, { recursive: true, force: true });
   mkdirSync(outDir, { recursive: true });
 
+  bundle('background-main.ts', 'background.js');
   bundle('content.ts', 'content.js');
+  bundle('options.ts', 'options.js');
   bundle('popup.ts', 'popup.js');
+  bundle('unlock.ts', 'unlock.js');
 
   const manifestJson = buildManifest();
   writeFileSync(join(outDir, 'manifest.json'), manifestJson);
+  const { version } = JSON.parse(manifestJson);
 
-  const popupHtml = readFileSync(join(ROOT, 'src', 'popup.html'));
-  writeFileSync(join(outDir, 'popup.html'), popupHtml);
-
-  const files = [
-    { name: 'content.js', data: readFileSync(join(outDir, 'content.js')) },
-    { name: 'manifest.json', data: Buffer.from(manifestJson) },
-    { name: 'popup.html', data: popupHtml },
-    { name: 'popup.js', data: readFileSync(join(outDir, 'popup.js')) },
-  ].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-
+  const files = [{ name: 'manifest.json', data: Buffer.from(manifestJson) }];
+  for (const name of ['background.js', 'content.js', 'options.js', 'popup.js', 'unlock.js']) {
+    files.push({ name, data: readFileSync(join(outDir, name)) });
+  }
+  // The pages hold the only remote addresses (the source and release
+  // links), so `check-no-network.mjs` can refuse every URL in a bundle.
+  for (const name of ['options.css', 'options.html', 'popup.css', 'popup.html', 'unlock.html']) {
+    const data = Buffer.from(readFileSync(join(ROOT, 'src', name), 'utf8').replaceAll('__VERSION__', version));
+    writeFileSync(join(outDir, name), data);
+    files.push({ name, data });
+  }
+  files.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   const zip = buildDeterministicZip(files, sourceDateEpoch);
   const zipPath = join(ROOT, `${outDirName}.zip`);
   writeFileSync(zipPath, zip);

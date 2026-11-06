@@ -1,0 +1,148 @@
+/**
+ * The runtime messages between the extension pages, the content script and
+ * the service worker (#3797). Only the service worker holds the data key;
+ * every page asks it by message.
+ */
+import type { CsvPreview, ImportResult } from './import';
+import type { DetailField, PersonRecord } from './types';
+import type { PasskeyKind } from './vault';
+
+export type Phase = 'setup' | 'locked' | 'unlocked';
+
+export type LockReason = 'idle' | 'pc-locked' | 'manual';
+
+export const AUTO_LOCK_CHOICES = [5, 15, 60, 240] as const;
+export type AutoLockMinutes = (typeof AUTO_LOCK_CHOICES)[number];
+
+export interface Settings {
+  autoLockMinutes: AutoLockMinutes;
+  lockWhenPcLocks: boolean;
+  lastBackupAt: string | null;
+}
+
+/** A method as the pages see it: no salt, no wrapped key. */
+export interface MethodView {
+  id: string;
+  type: 'password' | 'passkey' | 'recovery';
+  createdAt: string;
+  kind?: PasskeyKind;
+  name?: string;
+  credentialId?: string;
+  prfSalt?: string;
+  transports?: string[];
+  lastUsedAt?: string | null;
+  usedAt?: string | null;
+}
+
+export interface StateView {
+  phase: Phase;
+  version: string;
+  methods: MethodView[];
+  settings: Settings;
+  lockReason: LockReason | null;
+  passwordLockedUntil: number | null;
+  lastCheckAt: number | null;
+  now: number;
+  peopleCount: number | null;
+  setupRecoveryMade: boolean;
+}
+
+/** A secret as a page sends it. The `prf` output is base64. */
+export type SecretMessage =
+  | { type: 'password'; password: string }
+  | { type: 'recovery'; code: string }
+  | { type: 'passkey'; credentialId: string; prfOutput: string };
+
+export interface PasskeyMessage {
+  kind: PasskeyKind;
+  name: string;
+  credentialId: string;
+  prfSalt: string;
+  prfOutput: string;
+  transports: string[];
+}
+
+export type Request =
+  | { type: 'getState' }
+  | { type: 'setupAddPassword'; password: string }
+  | { type: 'setupAddPasskey'; passkey: PasskeyMessage }
+  | { type: 'setupMakeRecovery' }
+  | { type: 'setupFinish'; saved: boolean }
+  | { type: 'unlock'; secret: SecretMessage }
+  | { type: 'check'; secret: SecretMessage }
+  | { type: 'lock' }
+  | { type: 'getPeople' }
+  | { type: 'addPerson'; username: string; email: string }
+  | { type: 'renameUser'; from: string; to: string }
+  | { type: 'deletePerson'; username: string }
+  | { type: 'deleteAll' }
+  | { type: 'previewImport'; text: string }
+  | { type: 'applyImport'; text: string; fields: DetailField[] }
+  | { type: 'importBackup'; text: string; secret: SecretMessage }
+  | { type: 'exportBackup' }
+  | { type: 'addPasskey'; passkey: PasskeyMessage }
+  | { type: 'setPassword'; password: string }
+  | { type: 'removeMethod'; id: string }
+  | { type: 'newRecoveryCode' }
+  | { type: 'setSettings'; autoLockMinutes?: number; lockWhenPcLocks?: boolean }
+  | { type: 'lookupNames'; ids: string[] };
+
+export type ErrorCode =
+  | 'forbidden'
+  | 'setup-needed'
+  | 'not-in-setup'
+  | 'locked'
+  | 'check-needed'
+  | 'wrong-secret'
+  | 'password-locked-out'
+  | 'invalid'
+  | 'last-method'
+  | 'not-found'
+  | 'bad-file';
+
+export type Failure = { ok: false; error: ErrorCode; message: string };
+
+export type Response<T = object> = ({ ok: true } & T) | Failure;
+
+export interface PeopleResponse {
+  people: PersonRecord[];
+}
+
+export interface PreviewResponse {
+  preview: CsvPreview;
+}
+
+export interface ResultResponse {
+  result: ImportResult;
+}
+
+export interface ExportResponse {
+  fileName: string;
+  text: string;
+}
+
+export interface CodeResponse {
+  code: string;
+}
+
+export interface NamesResponse {
+  phase: Phase;
+  names: Record<string, string>;
+}
+
+/** The message the service worker sends to every tab after a lock, an unlock or a list change. */
+export const REFRESH_MESSAGE = 'zt-refresh';
+
+/** The port an extension page holds open while a Windows Hello or security key dialog runs. */
+export const CEREMONY_PORT = 'zt-ceremony';
+
+/** What a Windows Hello or security key dialog was for: unlock, a check, a setup method or a new method. */
+export type CeremonyOp = 'unlock' | 'check' | 'setup' | 'add';
+
+/** The message a page sends on the ceremony port: the dialog starts, or it ended. */
+export type CeremonyMessage = { op: CeremonyOp; kind: PasskeyKind } | { done: true };
+
+/** Sends one request to the service worker. */
+export function send<T = object>(request: Request): Promise<Response<T>> {
+  return chrome.runtime.sendMessage(request) as Promise<Response<T>>;
+}
