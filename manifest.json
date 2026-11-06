@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Zero Trust Translator",
+  "version": "0.1.0",
+  "description": "Shows real names over Zero Trust usernames in Restore Member Engagement, read from a list kept on this computer only.",
+  "permissions": ["storage"],
+  "content_scripts": [
+    {
+      "matches": ["https://rb-branch.org.uk/*", "https://rb-branch-staging.org.uk/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Zero Trust Translator"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'none';"
+  }
+}

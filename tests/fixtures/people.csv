@@ -1,0 +1,4 @@
+username,kind,email,first name,last name,phone,address,postcode
+Macc1,real,,Jane,Example,,,
+Macc2,real,,John,Doe,,,
+anon-ref-1,anonymised,,,,,,,

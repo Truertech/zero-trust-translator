@@ -1,0 +1,8 @@
+node_modules/
+dist/
+dist-dev/
+dist-check-*/
+*.zip
+*.zip.sha256
+playwright-report/
+test-results/

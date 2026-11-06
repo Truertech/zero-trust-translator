@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "types": ["chrome"],
+    "noEmit": true
+  },
+  // Only the shipped browser code is type-checked here. `scripts/*.mjs`
+  // (plain Node, run directly, never type-checked) and `tests/**/*.ts`
+  // (compiled on the fly by vitest/Playwright, not by `tsc`) would need
+  // `@types/node` to type-check under `strict`, and that package is not on
+  // the approved dependency list for this repository (issue #3786). Both
+  // run and fail loudly on their own if they are wrong; this config
+  // protects only `src`.
+  "include": ["src"]
+}

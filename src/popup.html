@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Zero Trust Translator</title>
+    <style>
+      body { font: 13px sans-serif; width: 320px; margin: 0; padding: 8px; }
+      h1 { font-size: 14px; margin: 0 0 8px; }
+      .row { display: flex; gap: 4px; margin-bottom: 6px; }
+      input { flex: 1; min-width: 0; }
+      ul { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow-y: auto; }
+      li { display: flex; justify-content: space-between; gap: 4px; padding: 2px 0; border-bottom: 1px solid #eee; }
+      #message { color: #555; min-height: 16px; }
+      footer { margin-top: 8px; font-size: 11px; color: #777; }
+    </style>
+  </head>
+  <body>
+    <h1>Zero Trust Translator</h1>
+    <div class="row">
+      <input type="file" id="import-file" accept=".csv,text/csv" />
+    </div>
+    <div class="row">
+      <input type="text" id="search" placeholder="Search" />
+    </div>
+    <div class="row">
+      <input type="text" id="add-id" placeholder="Username or reference" />
+      <input type="text" id="add-name" placeholder="Name" />
+      <button id="add-button" type="button">Add</button>
+    </div>
+    <div id="message" role="status"></div>
+    <ul id="list"></ul>
+    <div class="row">
+      <button id="export-button" type="button">Export CSV</button>
+      <button id="delete-all-button" type="button">Delete all</button>
+    </div>
+    <footer>
+      <span id="version"></span> &middot;
+      <a id="source-link" href="https://github.com/Truertech/zero-trust-translator" target="_blank" rel="noopener">source</a>
+    </footer>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
