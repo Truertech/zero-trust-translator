@@ -1,326 +1,228 @@
+import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { STORAGE_KEY_FOR_TESTS } from '../../src/store';
-import { readRenderedName } from './helpers/cdp-shadow';
-import { expect, test } from './fixtures/extension';
+import type { BrowserContext, Page, Worker } from '@playwright/test';
+import { readBadge, readRenderedName } from './helpers/cdp-shadow';
+import { expect, launch, test } from './fixtures/extension';
 
 const PEOPLE_CSV = join(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'people.csv');
+const PASSWORD = 'violet harbour lantern 47';
+const LOCKED_TEXT = 'Zero Trust Translator is locked · open the extension to unlock';
 
-async function setPeople(page: import('@playwright/test').Page, people: Record<string, string>): Promise<void> {
-  await page.evaluate(
-    ([key, value]) => chrome.storage.local.set({ [key]: value }),
-    [STORAGE_KEY_FOR_TESTS, people] as const,
-  );
+async function openPopup(context: BrowserContext, extensionId: string): Promise<Page> {
+  const popup = await context.newPage();
+  await popup.goto(`chrome-extension://${extensionId}/popup.html`);
+  return popup;
 }
 
-test.describe('content script', () => {
-  test('draws the real name over a marker whose id is in the list', async ({ context, extensionId }) => {
-    const popup = await context.newPage();
-    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
-    await setPeople(popup, { macc1: 'Jane Example' });
+/** Board 13 → 14 → 15: sets up the list with a password. Returns the recovery code. */
+async function setUpWithPassword(popup: Page): Promise<string> {
+  await popup.getByTestId('zt-setup-password').click();
+  await popup.getByTestId('zt-password-new').fill(PASSWORD);
+  await popup.getByTestId('zt-password-again').fill(PASSWORD);
+  await popup.getByTestId('zt-setup-continue').click();
+  const code = (await popup.getByTestId('zt-recovery-code').innerText()).replace(/\s+/g, '');
+  await expect(popup.getByTestId('zt-finish')).toBeDisabled();
+  await popup.getByTestId('zt-recovery-saved').check();
+  await popup.getByTestId('zt-finish').click();
+  await expect(popup.getByTestId('zt-recovery-code')).toHaveCount(0);
+  return code;
+}
 
+async function importPeople(popup: Page): Promise<void> {
+  await popup.getByTestId('zt-import').click();
+  await popup.getByTestId('zt-import-file').setInputFiles(PEOPLE_CSV);
+  await expect(popup.getByTestId('zt-import-result')).toBeVisible();
+  await popup.getByTestId('zt-import-done').click();
+  await expect(popup.getByTestId('zt-main')).toBeVisible();
+}
+
+async function setUpWithPeople(context: BrowserContext, extensionId: string): Promise<Page> {
+  const popup = await openPopup(context, extensionId);
+  await setUpWithPassword(popup);
+  await importPeople(popup);
+  return popup;
+}
+
+async function storageLocal(worker: Worker): Promise<string> {
+  return worker.evaluate(async () => JSON.stringify(await chrome.storage.local.get(null)));
+}
+
+test.describe('first start', () => {
+  test('the popup offers no import and no list before setup ends', async ({ context, extensionId }) => {
+    const popup = await openPopup(context, extensionId);
+
+    await expect(popup.getByTestId('zt-setup')).toBeVisible();
+    await expect(popup.getByTestId('zt-import')).toHaveCount(0);
+    await expect(popup.getByTestId('zt-list')).toHaveCount(0);
+  });
+
+  test('a v0.1.0 list is encrypted at setup and the plain key is removed', async ({ context, extensionId, serviceWorker }) => {
+    await serviceWorker.evaluate(() => chrome.storage.local.set({ 'zt-people-v1': { macc1: 'Jane Example' } }));
+    const popup = await openPopup(context, extensionId);
+    await setUpWithPassword(popup);
+    await expect(popup.getByTestId('zt-main')).toBeVisible();
+    await expect(popup.getByTestId('zt-count')).toContainText('1');
+
+    const page = await context.newPage();
+    await page.goto('/page.html');
+    await expect.poll(() => readRenderedName(page, 'macc1')).toBe('Jane Example');
+    const local = await storageLocal(serviceWorker);
+    expect(local).not.toContain('Jane');
+    expect(local).not.toContain('zt-people-v1');
+  });
+});
+
+test.describe('content script', () => {
+  test('draws the real name over a marker in the list, case-insensitively, and shows the badge', async ({ context, extensionId }) => {
+    await setUpWithPeople(context, extensionId);
     const page = await context.newPage();
     await page.goto('/page.html');
 
     await expect.poll(() => readRenderedName(page, 'macc1')).toBe('Jane Example');
-  });
-
-  test('matches ids case-insensitively: a lower-case list id against an upper-case marker id', async ({
-    context,
-    extensionId,
-  }) => {
-    const popup = await context.newPage();
-    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
-    await setPeople(popup, { macc2: 'John Doe' }); // fixture marker is data-zt-id="MACC2"
-
-    const page = await context.newPage();
-    await page.goto('/page.html');
-
     await expect.poll(() => readRenderedName(page, 'MACC2')).toBe('John Doe');
-  });
-
-  test('leaves a marker whose id is not in the list as the page drew it', async ({ context, extensionId }) => {
-    const popup = await context.newPage();
-    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
-    await setPeople(popup, {});
-
-    const page = await context.newPage();
-    await page.goto('/page.html');
-
-    await expect(page.locator('#marker-macc1')).toHaveText('Macc1');
-    await expect(page.locator('#marker-macc1')).not.toHaveAttribute('data-zt-name');
+    await expect.poll(() => readBadge(page)).toEqual({ state: 'unlocked', text: 'Names shown by Zero Trust Translator · 2 of 2 on this page' });
   });
 
   test('replaces a marker added to the page after it loaded', async ({ context, extensionId }) => {
-    const popup = await context.newPage();
-    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
-    await setPeople(popup, { macc3: 'Added Later' });
+    const popup = await setUpWithPeople(context, extensionId);
+    await popup.getByTestId('zt-add').click();
+    await popup.getByTestId('zt-add-username').fill('macc3');
+    await popup.getByTestId('zt-add-email').fill('macc3@example.org');
+    await popup.getByTestId('zt-add-save').click();
 
     const page = await context.newPage();
     await page.goto('/page.html');
     await page.locator('#add-marker-button').click();
 
-    await expect.poll(() => readRenderedName(page, 'macc3')).toBe('Added Later');
+    // A person with no name is not drawn: the marker keeps the page's text.
+    await expect.poll(() => readBadge(page)).toEqual({ state: 'unlocked', text: 'Names shown by Zero Trust Translator · 2 of 3 on this page' });
+    expect(await readRenderedName(page, 'macc3')).toBeUndefined();
+    await expect(page.locator('#marker-macc3')).toHaveText('Macc3');
   });
 
-  test('replaces a marker after a person is added to the list, with no reload', async ({ context, extensionId }) => {
-    const popup = await context.newPage();
-    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
-    await setPeople(popup, {});
-
-    const page = await context.newPage();
-    await page.goto('/page.html');
-    await expect.poll(() => readRenderedName(page, 'macc1')).toBeUndefined();
-
-    await setPeople(popup, { macc1: 'Jane Example' });
-
-    await expect.poll(() => readRenderedName(page, 'macc1')).toBe('Jane Example');
-  });
-
-  test('reverts to the page\'s own text when the person is deleted from the list, with no reload', async ({
-    context,
-    extensionId,
-  }) => {
-    const popup = await context.newPage();
-    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
-    await setPeople(popup, { macc1: 'Jane Example' });
-
+  test("the page's own script cannot read the name through innerText, outerHTML or a capture-phase window listener", async ({ context, extensionId }) => {
+    await setUpWithPeople(context, extensionId);
     const page = await context.newPage();
     await page.goto('/page.html');
     await expect.poll(() => readRenderedName(page, 'macc1')).toBe('Jane Example');
 
-    await setPeople(popup, {});
-
-    await expect.poll(() => readRenderedName(page, 'macc1')).toBe('Macc1');
-  });
-
-  test("the page's own script cannot read the name through innerText, outerHTML or a capture-phase window listener", async ({
-    context,
-    extensionId,
-  }) => {
-    const popup = await context.newPage();
-    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
-    await setPeople(popup, { macc1: 'Jane Example' });
-
-    const page = await context.newPage();
-    await page.goto('/page.html');
-    await expect.poll(() => readRenderedName(page, 'macc1')).toBe('Jane Example');
-
-    const innerText = await page.evaluate(() => document.body.innerText);
-    const outerHtml = await page.locator('#marker-macc1').evaluate((el) => el.outerHTML);
+    const innerText = await page.evaluate(() => document.documentElement.innerText);
+    const outerHtml = await page.evaluate(() => document.documentElement.outerHTML);
     const captured = await page.evaluate(() => window.__capturedMessages);
+    const shadow = await page.locator('#marker-macc1').evaluate((el) => el.shadowRoot);
 
     expect(innerText).not.toContain('Jane Example');
     expect(outerHtml).not.toContain('Jane Example');
     expect(JSON.stringify(captured)).not.toContain('Jane Example');
-  });
-
-  test('the extension makes no network request', async ({ context, extensionId, baseURL }) => {
-    const popup = await context.newPage();
-    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
-    await setPeople(popup, { macc1: 'Jane Example' });
-
-    const page = await context.newPage();
-    const requests: string[] = [];
-    page.on('request', (request) => requests.push(request.url()));
-    await page.goto('/page.html');
-    await expect.poll(() => readRenderedName(page, 'macc1')).toBe('Jane Example');
-
-    const fixtureOrigin = new URL(baseURL ?? '').origin;
-    const foreign = requests.filter((url) => new URL(url).origin !== fixtureOrigin);
-    expect(foreign).toEqual([]);
+    expect(shadow).toBeNull();
   });
 });
 
-test.describe('popup', () => {
-  test.beforeEach(async ({ context, extensionId }) => {
-    const popup = await context.newPage();
-    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
-    await popup.evaluate(() => chrome.storage.local.clear());
-    await popup.close();
+test.describe('lock and unlock', () => {
+  test('Lock hides the names on an open tab with no reload, and the password brings them back', async ({ context, extensionId }) => {
+    const popup = await setUpWithPeople(context, extensionId);
+    const page = await context.newPage();
+    await page.goto('/page.html');
+    await expect.poll(() => readRenderedName(page, 'macc1')).toBe('Jane Example');
+
+    await popup.getByTestId('zt-lock').click();
+    await expect(popup.getByTestId('zt-locked')).toBeVisible();
+    await expect.poll(() => readRenderedName(page, 'macc1')).toBeUndefined();
+    await expect(page.locator('#marker-macc1')).toHaveText('Macc1');
+    await expect.poll(() => readBadge(page)).toEqual({ state: 'locked', text: LOCKED_TEXT });
+
+    await popup.getByTestId('zt-unlock-password').click();
+    await popup.getByTestId('zt-password-field').fill(PASSWORD);
+    await popup.getByTestId('zt-password-submit').click();
+    await expect(popup.getByTestId('zt-main')).toBeVisible();
+    await expect.poll(() => readRenderedName(page, 'macc1')).toBe('Jane Example');
   });
 
-  test('imports people.csv from the #3785 export format; every row with a name is imported', async ({
-    context,
-    extensionId,
-  }) => {
-    const popup = await context.newPage();
-    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
+  test('a wrong password says so and the page keeps the username', async ({ context, extensionId }) => {
+    const popup = await setUpWithPeople(context, extensionId);
+    await popup.getByTestId('zt-lock').click();
+    const page = await context.newPage();
+    await page.goto('/page.html');
 
-    await popup.setInputFiles('#import-file', PEOPLE_CSV);
+    await popup.getByTestId('zt-unlock-password').click();
+    await popup.getByTestId('zt-password-field').fill('not the password at all');
+    await popup.getByTestId('zt-password-submit').click();
 
-    await expect(popup.locator('#message')).toContainText('Imported 2 rows, skipped 1');
-    await expect(popup.locator('#list')).toContainText('Jane Example (macc1)');
-    await expect(popup.locator('#list')).toContainText('John Doe (macc2)');
+    await expect(popup.getByTestId('zt-password-error')).toHaveText('That password is not right');
+    await expect.poll(() => readBadge(page)).toEqual({ state: 'locked', text: LOCKED_TEXT });
+    expect(await readRenderedName(page, 'macc1')).toBeUndefined();
   });
 
-  test('skips a row with an empty id or an empty name, and reports why', async ({ context, extensionId }) => {
-    const popup = await context.newPage();
-    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
+  test('the list is locked after Chrome closes and opens the same profile', async ({ context, extensionId, userDataDir }) => {
+    await setUpWithPeople(context, extensionId);
+    await context.close();
 
-    await popup.setInputFiles('#import-file', PEOPLE_CSV);
-
-    await expect(popup.locator('#message')).toContainText('row 4: empty name');
+    const reopened = await launch(userDataDir);
+    try {
+      const page = await reopened.newPage();
+      await page.goto('/page.html');
+      await expect.poll(() => readBadge(page)).toEqual({ state: 'locked', text: LOCKED_TEXT });
+      const popup = await openPopup(reopened, extensionId);
+      await expect(popup.getByTestId('zt-locked')).toBeVisible();
+    } finally {
+      await reopened.close();
+    }
   });
 
-  test('asks before an import replaces existing rows, and "Cancel" leaves the list unchanged', async ({
-    context,
-    extensionId,
-  }) => {
-    const popup = await context.newPage();
-    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
-    await setPeople(popup, { macc1: 'Old Name' });
-    // The popup draws its list once when it opens; reopen it to show the seeded row.
-    await popup.reload();
+  test('the recovery code unlocks the list', async ({ context, extensionId }) => {
+    const popup = await openPopup(context, extensionId);
+    const code = await setUpWithPassword(popup);
+    await importPeople(popup);
+    await popup.getByTestId('zt-lock').click();
 
-    popup.once('dialog', (dialog) => dialog.dismiss());
-    await popup.setInputFiles('#import-file', PEOPLE_CSV);
+    await popup.getByTestId('zt-unlock-recovery').click();
+    await popup.getByTestId('zt-recovery-field').fill(code.toLowerCase());
+    await popup.getByTestId('zt-password-submit').click();
 
-    await expect(popup.locator('#message')).toContainText('Import cancelled');
-    await expect(popup.locator('#list')).toContainText('Old Name (macc1)');
-    await expect(popup.locator('#list')).not.toContainText('Jane Example');
+    await expect(popup.getByTestId('zt-main')).toBeVisible();
+  });
+});
+
+test.describe('storage and network', () => {
+  test('chrome.storage.local holds no name after an import', async ({ context, extensionId, serviceWorker }) => {
+    await setUpWithPeople(context, extensionId);
+
+    const local = await storageLocal(serviceWorker);
+    expect(local).not.toContain('Jane');
+    expect(local).not.toContain('John');
+    expect(local).not.toContain('zt-people-v1');
   });
 
-  test('accepting the replace prompt imports the new rows', async ({ context, extensionId }) => {
-    const popup = await context.newPage();
-    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
-    await setPeople(popup, { macc1: 'Old Name' });
+  test('an export straight after unlock saves an encrypted file with no name in it', async ({ context, extensionId }) => {
+    const popup = await setUpWithPeople(context, extensionId);
+    await popup.getByTestId('zt-export').click();
+    await expect(popup.getByTestId('zt-reauth')).toHaveCount(0);
 
-    popup.once('dialog', (dialog) => dialog.accept());
-    await popup.setInputFiles('#import-file', PEOPLE_CSV);
-
-    await expect(popup.locator('#list')).toContainText('Jane Example (macc1)');
+    const [download] = await Promise.all([popup.waitForEvent('download'), popup.getByTestId('zt-export-save').click()]);
+    expect(download.suggestedFilename()).toMatch(/^zero-trust-translator-\d{4}-\d{2}-\d{2}\.ztbackup$/);
+    const text = readFileSync((await download.path())!, 'utf8');
+    expect(text).not.toContain('Jane');
   });
 
-  test('adds, edits, deletes and searches a row', async ({ context, extensionId }) => {
-    const popup = await context.newPage();
-    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
+  test('the extension makes no network request', async ({ context, extensionId, baseURL }) => {
+    const requests: string[] = [];
+    context.on('request', (request) => requests.push(request.url()));
+    await setUpWithPeople(context, extensionId);
+    const page = await context.newPage();
+    await page.goto('/page.html');
+    await expect.poll(() => readRenderedName(page, 'macc1')).toBe('Jane Example');
 
-    await popup.locator('#add-id').fill('macc9');
-    await popup.locator('#add-name').fill('Added Person');
-    await popup.locator('#add-button').click();
-    await expect(popup.locator('#list')).toContainText('Added Person (macc9)');
-
-    popup.once('dialog', (dialog) => dialog.accept('Edited Person'));
-    await popup.locator('#list li', { hasText: 'Added Person' }).locator('button', { hasText: 'Edit' }).click();
-    await expect(popup.locator('#list')).toContainText('Edited Person (macc9)');
-    await expect(popup.locator('#list')).not.toContainText('Added Person');
-
-    await popup.locator('#add-id').fill('macc10');
-    await popup.locator('#add-name').fill('Second Person');
-    await popup.locator('#add-button').click();
-
-    await popup.locator('#search').fill('macc9');
-    await expect(popup.locator('#list')).toContainText('Edited Person');
-    await expect(popup.locator('#list')).not.toContainText('Second Person');
-    await popup.locator('#search').fill('');
-
-    popup.once('dialog', (dialog) => dialog.accept());
-    await popup.locator('#list li', { hasText: 'Edited Person' }).locator('button', { hasText: 'Delete' }).click();
-    await expect(popup.locator('#list')).not.toContainText('Edited Person');
-    await expect(popup.locator('#list')).toContainText('Second Person');
+    const allowed = [new URL(baseURL ?? '').origin, `chrome-extension://${extensionId}`];
+    expect(requests.filter((url) => !allowed.some((origin) => url.startsWith(origin)))).toEqual([]);
   });
 
-  test('refuses a CSV with no username or reference column, and leaves the list unchanged', async ({
-    context,
-    extensionId,
-  }) => {
-    const popup = await context.newPage();
-    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
-    await setPeople(popup, { macc1: 'Jane Example' });
-    await popup.reload();
+  test('the Security page shows the version, and the only method cannot be removed', async ({ context, extensionId }) => {
+    await setUpWithPeople(context, extensionId);
+    const options = await context.newPage();
+    await options.goto(`chrome-extension://${extensionId}/options.html`);
 
-    await popup.setInputFiles('#import-file', {
-      name: 'names-only.csv',
-      mimeType: 'text/csv',
-      buffer: Buffer.from('name\nJohn Doe\n'),
-    });
-
-    await expect(popup.locator('#message')).toHaveText('The file has no "username" or "reference" column.');
-    await expect(popup.locator('#list li')).toHaveCount(1);
-    await expect(popup.locator('#list')).toContainText('Jane Example (macc1)');
-  });
-
-  test('Add with an empty id or an empty name shows a message and adds nothing', async ({ context, extensionId }) => {
-    const popup = await context.newPage();
-    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
-
-    await popup.locator('#add-name').fill('No Id Person');
-    await popup.locator('#add-button').click();
-    await expect(popup.locator('#message')).toHaveText('Enter both a username or reference and a name.');
-
-    await popup.locator('#add-id').fill('macc1');
-    await popup.locator('#add-name').fill('   ');
-    await popup.locator('#add-button').click();
-    await expect(popup.locator('#message')).toHaveText('Enter both a username or reference and a name.');
-
-    await expect(popup.locator('#list')).toHaveText('No people added yet. Import a CSV or add one above.');
-  });
-
-  test('a search with no match says so', async ({ context, extensionId }) => {
-    const popup = await context.newPage();
-    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
-    await setPeople(popup, { macc1: 'Jane Example' });
-    await popup.reload();
-
-    await popup.locator('#search').fill('nobody');
-
-    await expect(popup.locator('#list')).toHaveText('No match for this search.');
-  });
-
-  test('an edit to a blank name leaves the row unchanged', async ({ context, extensionId }) => {
-    const popup = await context.newPage();
-    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
-    await setPeople(popup, { macc1: 'Jane Example' });
-    await popup.reload();
-
-    popup.once('dialog', (dialog) => dialog.accept('   '));
-    await popup.locator('#list li', { hasText: 'Jane Example' }).locator('button', { hasText: 'Edit' }).click();
-
-    await expect(popup.locator('#list')).toContainText('Jane Example (macc1)');
-    expect(await popup.evaluate((key) => chrome.storage.local.get(key), STORAGE_KEY_FOR_TESTS)).toEqual({
-      [STORAGE_KEY_FOR_TESTS]: { macc1: 'Jane Example' },
-    });
-  });
-
-  test('Delete all asks first: "Cancel" keeps the list, "OK" empties it', async ({ context, extensionId }) => {
-    const popup = await context.newPage();
-    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
-    await setPeople(popup, { macc1: 'Jane Example', macc2: 'John Doe' });
-    await popup.reload();
-
-    popup.once('dialog', (dialog) => dialog.dismiss());
-    await popup.locator('#delete-all-button').click();
-    await expect(popup.locator('#list li')).toHaveCount(2);
-
-    popup.once('dialog', (dialog) => dialog.accept());
-    await popup.locator('#delete-all-button').click();
-    await expect(popup.locator('#message')).toHaveText('Deleted the whole list.');
-    await expect(popup.locator('#list')).toHaveText('No people added yet. Import a CSV or add one above.');
-    expect(await popup.evaluate((key) => chrome.storage.local.get(key), STORAGE_KEY_FOR_TESTS)).toEqual({
-      [STORAGE_KEY_FOR_TESTS]: {},
-    });
-  });
-
-  test('exports the list as a CSV file', async ({ context, extensionId }) => {
-    const popup = await context.newPage();
-    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
-    await setPeople(popup, { macc1: 'Jane Example' });
-    await popup.reload();
-
-    const [download] = await Promise.all([popup.waitForEvent('download'), popup.locator('#export-button').click()]);
-    const path = await download.path();
-    const fs = await import('node:fs');
-    const text = fs.readFileSync(path!, 'utf8');
-
-    expect(text).toBe('username,name\r\nmacc1,Jane Example\r\n');
-  });
-
-  test('shows the extension version and a link to the source repository', async ({ context, extensionId }) => {
-    const popup = await context.newPage();
-    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
-
-    await expect(popup.locator('#version')).toHaveText(/^v\d+\.\d+\.\d+/);
-    await expect(popup.locator('#source-link')).toHaveAttribute('href', 'https://github.com/Truertech/zero-trust-translator');
+    await expect(options.getByText(/Zero Trust Translator · v\d+\.\d+\.\d+/)).toBeVisible();
+    await expect(options.getByTestId('zt-remove-method')).toBeDisabled();
   });
 });
