@@ -160,7 +160,7 @@ function showSetupPassword(): void {
   show(
     h(
       'div',
-      { class: 'screen' },
+      { class: 'screen', testid: 'zt-setup-create' },
       bar('Create a password', () => void showSetup(), h('span', { class: 'step' }, 'Step 1 of 2')),
       h('div', { class: 'body' }, form.element, error),
       h('div', { class: 'actions', style: 'flex-direction:column;gap:10px' }, next, h('div', { class: 'dots', 'aria-hidden': 'true' }, h('i', { class: 'on' }), h('i'))),
@@ -192,7 +192,7 @@ async function showRecovery(): Promise<void> {
   show(
     h(
       'div',
-      { class: 'screen' },
+      { class: 'screen', testid: 'zt-recovery' },
       bar('Your recovery code', () => void showSetup(), h('span', { class: 'step' }, 'Step 2 of 2')),
       h(
         'div',
@@ -372,7 +372,7 @@ function showSecret(screen: SecretScreen): void {
     })();
   });
   input.addEventListener('input', () => box.classList.remove('bad'));
-  show(h('div', { class: 'screen tint' }, bar(screen.title, screen.back), form, screen.footer));
+  show(h('div', { class: 'screen tint', testid: 'zt-secret' }, bar(screen.title, screen.back), form, screen.footer));
 }
 
 function lockFooter(left: HTMLElement): HTMLElement {
