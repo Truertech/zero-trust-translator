@@ -115,6 +115,8 @@ describe('sealList and openList', () => {
   it.each([
     ['a changed ciphertext', (s: Sealed): Sealed => ({ ...s, ct: tamper(s.ct) })],
     ['a changed IV', (s: Sealed): Sealed => ({ ...s, iv: tamper(s.iv) })],
+    ['an IV that is not base64', (s: Sealed): Sealed => ({ ...s, iv: '%%%' })],
+    ['a ciphertext that is not base64', (s: Sealed): Sealed => ({ ...s, ct: '%%%' })],
   ])('refuses %s with WrongSecretError', async (_label, change) => {
     const sealed = await sealList(rawDataKey, people);
 

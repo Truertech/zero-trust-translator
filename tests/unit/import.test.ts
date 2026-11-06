@@ -255,6 +255,14 @@ describe('previewCsv', () => {
     expect(preview).toMatchObject({ kind: 'nationbuilder', format: 'nb-member', label: FORMAT_LABELS['nb-member'], rowCount: 2 });
   });
 
+  it('plans a NationBuilder "All columns" file against the list', () => {
+    const preview = previewCsv(`${ALL_HEADER}
+9,Jane A. Example,jane@example.org
+`, [jane]);
+
+    expect(preview).toMatchObject({ kind: 'nationbuilder', format: 'nb-all', label: FORMAT_LABELS['nb-all'], rowCount: 1 });
+  });
+
   it.each([
     ['people.csv', 'username,email,name\nu1,u1@example.org,U One\n,,\n', 'people'],
     ['a username CSV', 'username,name\nu1,U One\n,\n', 'other'],
@@ -268,6 +276,17 @@ describe('previewCsv', () => {
 });
 
 describe('applyCsv', () => {
+  it('applies a NationBuilder "All columns" file with the ticked fields', () => {
+    const text = `${ALL_HEADER}
+9,Jane A. Example,jane@example.org
+`;
+
+    expect(applyCsv(text, [jane, bob], ['name'])).toEqual({
+      people: [{ ...jane, name: 'Jane A. Example' }, bob],
+      result: { kind: 'nationbuilder', added: 0, updated: 1, unchanged: 0, skipped: [] },
+    });
+  });
+
   it('applies a NationBuilder file with the ticked fields and reports the counts and skipped rows', () => {
     const text = `${MEMBER_HEADER}\nJane A. Example,,,,jane@example.org,07700 900002,\nBob Sample,,,,bob@example.org,,\n,,,,,,\n`;
 

@@ -695,7 +695,11 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
     }
     // A content script may ask for names and nothing else.
     if (request.type === 'lookupNames') {
-      return { ok: true, ...(await lookupNames(request.ids)) };
+      try {
+        return { ok: true, ...(await lookupNames(request.ids)) };
+      } catch (error) {
+        return failure(error);
+      }
     }
     if (!fromExtensionPage(sender)) {
       return { ok: false, error: 'forbidden', message: MESSAGES.forbidden } satisfies Failure;

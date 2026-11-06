@@ -288,6 +288,16 @@ describe('setup', () => {
     expect(w.chrome.local.data[VAULT_KEY]).toBeUndefined();
   });
 
+  it('finishing setup with a recovery code and no unlocking method is refused', async () => {
+    const w = world();
+    expectOk(await w.send({ type: 'setupAddPassword', password: PASSWORD }));
+    expectOk(await w.send({ type: 'setupMakeRecovery' }));
+    const pending = w.chrome.session.data[SETUP_KEY] as { methods: { type: string }[] };
+    w.chrome.session.data[SETUP_KEY] = { ...pending, methods: pending.methods.filter((m) => m.type === 'recovery') };
+    expectError(await w.send({ type: 'setupFinish', saved: true }), 'invalid', 'Choose how you unlock the list, and save the recovery code.');
+    expect(w.chrome.local.data[VAULT_KEY]).toBeUndefined();
+  }, SLOW);
+
   it('finishing setup moves the v0.1.0 list into the vault, removes the plain key, unlocks and tells every tab', async () => {
     const w = world();
     w.chrome.local.data[LEGACY_STORAGE_KEY] = { macc1: 'Jane Example', broken: 5 };
@@ -429,6 +439,15 @@ describe('unlock', () => {
     expectError(await w.send({ type: 'unlock', secret: { type: 'passkey', credentialId: fx.passkey.credentialId, prfOutput: '%%%' } }), 'invalid', 'That is not valid.');
     expect((await stateOf(w)).phase).toBe('locked');
   });
+
+  it('an unlock clears the lock reason from the session and keeps only the unlocked state', async () => {
+    const w = unlockedWorld();
+    expectOk(await w.send({ type: 'lock' }));
+    expect(w.chrome.session.data[LOCK_REASON_KEY]).toBe('manual');
+    expectOk(await w.send({ type: 'unlock', secret: recoverySecret() }));
+    expect(Object.keys(w.chrome.session.data)).toEqual([UNLOCKED_KEY]);
+    expect((await stateOf(w)).lockReason).toBeNull();
+  });
 });
 
 describe('password lockout', () => {
@@ -485,6 +504,36 @@ describe('password lockout', () => {
       }
       expectOk(await w.send({ type: 'unlock', secret: recoverySecret() }));
       expect((await stateOf(w)).phase).toBe('unlocked');
+    },
+    SLOW,
+  );
+
+  it(
+    'an unlock with the recovery code or a key leaves the password lockout in place',
+    async () => {
+      for (const secret of [recoverySecret, passkeySecret]) {
+        const w = lockedWorld();
+        for (let i = 0; i < 5; i += 1) {
+          await w.send({ type: 'unlock', secret: wrong });
+        }
+        const lockedOut = w.chrome.local.data[LOCKOUT_KEY];
+        expect(lockedOut).toEqual({ failures: 0, lockedUntil: T0 + PASSWORD_LOCKOUT_MS });
+        expectOk(await w.send({ type: 'unlock', secret: secret() }));
+        expect(w.chrome.local.data[LOCKOUT_KEY]).toEqual(lockedOut);
+      }
+    },
+    SLOW,
+  );
+
+  it(
+    'a wrong count under five is kept when the recovery code unlocks',
+    async () => {
+      const w = lockedWorld();
+      for (let i = 0; i < 3; i += 1) {
+        await w.send({ type: 'unlock', secret: wrong });
+      }
+      expectOk(await w.send({ type: 'unlock', secret: recoverySecret() }));
+      expect(w.chrome.local.data[LOCKOUT_KEY]).toEqual({ failures: 3, lockedUntil: null });
     },
     SLOW,
   );
@@ -593,8 +642,14 @@ describe('the check in the last 5 minutes', () => {
     SLOW,
   );
 
-  it('the window is exactly 300 seconds', () => {
+  it('the window is exactly 300 seconds: a guarded request runs at 300,000 ms and is refused 1 ms later', async () => {
     expect(CHECK_WINDOW_MS).toBe(300_000);
+    const atEdge = unlockedWorld();
+    atEdge.clock.t = T0 + CHECK_WINDOW_MS;
+    expectOk(await atEdge.send({ type: 'exportBackup' }));
+    const past = unlockedWorld();
+    past.clock.t = T0 + CHECK_WINDOW_MS + 1;
+    expectError(await past.send({ type: 'exportBackup' }), 'check-needed');
   });
 
   it('a check with the right secret starts the window again and marks the method used', async () => {
@@ -604,6 +659,7 @@ describe('the check in the last 5 minutes', () => {
     const state = await stateOf(w);
     expect(state.lastCheckAt).toBe(T0 + 301_000);
     expect(state.methods.find((m: any) => m.type === 'passkey').lastUsedAt).toBe(new Date(T0 + 301_000).toISOString());
+    expect(w.chrome.sent).toEqual([]);
     expectOk(await w.send({ type: 'exportBackup' }));
   });
 
@@ -811,6 +867,24 @@ describe('import and backup', () => {
     expect((await stateOf(w)).settings.lastBackupAt).toBe(new Date(T0).toISOString());
   });
 
+  it('exportBackup keeps the other settings beside lastBackupAt, and a later setSettings keeps lastBackupAt', async () => {
+    const w = unlockedWorld();
+    expectOk(await w.send({ type: 'setSettings', autoLockMinutes: 60, lockWhenPcLocks: false }));
+    expectOk(await w.send({ type: 'exportBackup' }));
+    const stamp = new Date(T0).toISOString();
+    expect((await stateOf(w)).settings).toEqual({ autoLockMinutes: 60, lockWhenPcLocks: false, lastBackupAt: stamp });
+    expectOk(await w.send({ type: 'setSettings', autoLockMinutes: 15 }));
+    expect((await stateOf(w)).settings).toEqual({ autoLockMinutes: 15, lockWhenPcLocks: false, lastBackupAt: stamp });
+  });
+
+  it('importBackup with the password adds the people back', async () => {
+    const w = unlockedWorld();
+    const { text } = expectOk(await w.send({ type: 'exportBackup' }));
+    expectOk(await w.send({ type: 'deleteAll' }));
+    const result = expectOk(await w.send({ type: 'importBackup', text, secret: { type: 'password', password: PASSWORD } }));
+    expect(result.result).toMatchObject({ kind: 'backup', added: 3 });
+  }, SLOW);
+
   it('importBackup with the recovery code adds the people back, then finds them unchanged', async () => {
     const w = unlockedWorld();
     const { text } = expectOk(await w.send({ type: 'exportBackup' }));
@@ -899,6 +973,13 @@ describe('names for the content script', () => {
   it('returns no names when the ids are not a list', async () => {
     const w = unlockedWorld();
     expect(await w.send({ type: 'lookupNames', ids: 'macc1' }, CONTENT_SENDER)).toEqual({ ok: true, phase: 'unlocked', names: {} });
+  });
+
+  it('answers invalid, and does not leave the content script waiting, when the stored list cannot be opened', async () => {
+    const w = unlockedWorld();
+    const stored = w.chrome.local.data[VAULT_KEY] as any;
+    w.chrome.local.data[VAULT_KEY] = { ...stored, data: { ...stored.data, ct: toBase64(randomBytes(48)) } };
+    await expect(w.send({ type: 'lookupNames', ids: ['macc1'] }, CONTENT_SENDER)).resolves.toEqual({ ok: false, error: 'invalid', message: 'That is not valid.' });
   });
 });
 
