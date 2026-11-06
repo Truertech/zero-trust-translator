@@ -20,9 +20,21 @@ function setMessage(text: string): void {
   messageEl.textContent = text;
 }
 
+/** `1 row`, `2 rows`. Never shows the literal "(s)" a count of one or many both used to show. */
+function plural(count: number, word: string): string {
+  return count === 1 ? `${count} ${word}` : `${count} ${word}s`;
+}
+
 function renderList(): void {
   const filtered = store.search(currentPeople, searchInput.value);
   listEl.innerHTML = '';
+  if (filtered.length === 0) {
+    const empty = document.createElement('li');
+    empty.textContent =
+      currentPeople.length === 0 ? 'No people added yet. Import a CSV or add one above.' : 'No match for this search.';
+    listEl.append(empty);
+    return;
+  }
   for (const person of filtered) {
     const li = document.createElement('li');
     const label = document.createElement('span');
@@ -116,7 +128,7 @@ fileInput.addEventListener('change', async () => {
   }
   const existingIds = await store.findExistingIds(parsed.imported);
   if (existingIds.length > 0) {
-    const proceed = window.confirm(`${existingIds.length} row(s) already in the list will be replaced. Continue?`);
+    const proceed = window.confirm(`${plural(existingIds.length, 'row')} already in the list will be replaced. Continue?`);
     if (!proceed) {
       setMessage('Import cancelled. The list is unchanged.');
       return;
@@ -124,7 +136,7 @@ fileInput.addEventListener('change', async () => {
   }
   await store.upsertMany(parsed.imported);
   const skippedText = parsed.skipped.length > 0 ? `, skipped ${parsed.skipped.length} (${parsed.skipped.map((s) => `row ${s.row}: ${s.reason}`).join('; ')})` : '';
-  setMessage(`Imported ${parsed.imported.length} row(s)${skippedText}.`);
+  setMessage(`Imported ${plural(parsed.imported.length, 'row')}${skippedText}.`);
   await refresh();
 });
 

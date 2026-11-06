@@ -132,7 +132,7 @@ test.describe('popup', () => {
 
     await popup.setInputFiles('#import-file', PEOPLE_CSV);
 
-    await expect(popup.locator('#message')).toContainText('Imported 2 row(s), skipped 1');
+    await expect(popup.locator('#message')).toContainText('Imported 2 rows, skipped 1');
     await expect(popup.locator('#list')).toContainText('Jane Example (macc1)');
     await expect(popup.locator('#list')).toContainText('John Doe (macc2)');
   });
