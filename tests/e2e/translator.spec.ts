@@ -221,6 +221,87 @@ test.describe('popup', () => {
     await expect(popup.locator('#list')).toContainText('Second Person');
   });
 
+  test('refuses a CSV with no username or reference column, and leaves the list unchanged', async ({
+    context,
+    extensionId,
+  }) => {
+    const popup = await context.newPage();
+    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
+    await setPeople(popup, { macc1: 'Jane Example' });
+    await popup.reload();
+
+    await popup.setInputFiles('#import-file', {
+      name: 'names-only.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from('name\nJohn Doe\n'),
+    });
+
+    await expect(popup.locator('#message')).toHaveText('The file has no "username" or "reference" column.');
+    await expect(popup.locator('#list li')).toHaveCount(1);
+    await expect(popup.locator('#list')).toContainText('Jane Example (macc1)');
+  });
+
+  test('Add with an empty id or an empty name shows a message and adds nothing', async ({ context, extensionId }) => {
+    const popup = await context.newPage();
+    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
+
+    await popup.locator('#add-name').fill('No Id Person');
+    await popup.locator('#add-button').click();
+    await expect(popup.locator('#message')).toHaveText('Enter both a username or reference and a name.');
+
+    await popup.locator('#add-id').fill('macc1');
+    await popup.locator('#add-name').fill('   ');
+    await popup.locator('#add-button').click();
+    await expect(popup.locator('#message')).toHaveText('Enter both a username or reference and a name.');
+
+    await expect(popup.locator('#list')).toHaveText('No people added yet. Import a CSV or add one above.');
+  });
+
+  test('a search with no match says so', async ({ context, extensionId }) => {
+    const popup = await context.newPage();
+    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
+    await setPeople(popup, { macc1: 'Jane Example' });
+    await popup.reload();
+
+    await popup.locator('#search').fill('nobody');
+
+    await expect(popup.locator('#list')).toHaveText('No match for this search.');
+  });
+
+  test('an edit to a blank name leaves the row unchanged', async ({ context, extensionId }) => {
+    const popup = await context.newPage();
+    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
+    await setPeople(popup, { macc1: 'Jane Example' });
+    await popup.reload();
+
+    popup.once('dialog', (dialog) => dialog.accept('   '));
+    await popup.locator('#list li', { hasText: 'Jane Example' }).locator('button', { hasText: 'Edit' }).click();
+
+    await expect(popup.locator('#list')).toContainText('Jane Example (macc1)');
+    expect(await popup.evaluate((key) => chrome.storage.local.get(key), STORAGE_KEY_FOR_TESTS)).toEqual({
+      [STORAGE_KEY_FOR_TESTS]: { macc1: 'Jane Example' },
+    });
+  });
+
+  test('Delete all asks first: "Cancel" keeps the list, "OK" empties it', async ({ context, extensionId }) => {
+    const popup = await context.newPage();
+    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
+    await setPeople(popup, { macc1: 'Jane Example', macc2: 'John Doe' });
+    await popup.reload();
+
+    popup.once('dialog', (dialog) => dialog.dismiss());
+    await popup.locator('#delete-all-button').click();
+    await expect(popup.locator('#list li')).toHaveCount(2);
+
+    popup.once('dialog', (dialog) => dialog.accept());
+    await popup.locator('#delete-all-button').click();
+    await expect(popup.locator('#message')).toHaveText('Deleted the whole list.');
+    await expect(popup.locator('#list')).toHaveText('No people added yet. Import a CSV or add one above.');
+    expect(await popup.evaluate((key) => chrome.storage.local.get(key), STORAGE_KEY_FOR_TESTS)).toEqual({
+      [STORAGE_KEY_FOR_TESTS]: {},
+    });
+  });
+
   test('exports the list as a CSV file', async ({ context, extensionId }) => {
     const popup = await context.newPage();
     await popup.goto(`chrome-extension://${extensionId}/popup.html`);
