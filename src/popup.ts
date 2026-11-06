@@ -579,12 +579,14 @@ function showEdit(person: PersonRecord): void {
         await showMain();
         return;
       }
+      save.disabled = true;
       try {
         await call({ type: 'renameUser', from: person.username, to: username.value });
         await showMain();
       } catch (e) {
         error.textContent = messageOf(e);
         username.setAttribute('aria-invalid', 'true');
+        save.disabled = false;
       }
     })();
   });
@@ -592,10 +594,19 @@ function showEdit(person: PersonRecord): void {
     error.textContent = '';
     username.removeAttribute('aria-invalid');
   });
-  const remove = async (): Promise<void> => {
-    await call({ type: 'deletePerson', username: person.username });
-    await showMain();
-  };
+  const deleteBtn = h('button', { class: 'btn dng', type: 'button', style: 'align-self:flex-start', testid: 'zt-edit-delete' }, svg('trash'), 'Delete person');
+  deleteBtn.addEventListener('click', () => {
+    void (async () => {
+      deleteBtn.disabled = true;
+      try {
+        await call({ type: 'deletePerson', username: person.username });
+        await showMain();
+      } catch (e) {
+        error.textContent = messageOf(e);
+        deleteBtn.disabled = false;
+      }
+    })();
+  });
   show(
     h(
       'div',
@@ -620,7 +631,7 @@ function showEdit(person: PersonRecord): void {
           svg('info', 18),
           h('span', {}, 'To change other details, update them in NationBuilder, then ', h('button', { class: 'link', type: 'button', onclick: () => showImportChoose() }, 'import the export again'), '.'),
         ),
-        h('button', { class: 'btn dng', type: 'button', style: 'align-self:flex-start', testid: 'zt-edit-delete', onclick: () => void remove() }, svg('trash'), 'Delete person'),
+        deleteBtn,
       ),
       h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'button', onclick: () => void showMain() }, 'Cancel'), save),
     ),
@@ -634,11 +645,13 @@ function showAdd(): void {
   const save = h('button', { class: 'btn pri', type: 'button', testid: 'zt-add-save' }, 'Save');
   save.addEventListener('click', () => {
     void (async () => {
+      save.disabled = true;
       try {
         await call({ type: 'addPerson', username: username.value, email: email.value });
         await showMain();
       } catch (e) {
         error.textContent = messageOf(e);
+        save.disabled = false;
       }
     })();
   });
