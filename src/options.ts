@@ -145,7 +145,7 @@ function transportLabel(method: MethodView): string {
 
 function removeButton(method: MethodView): HTMLElement {
   const last = unlockingCount() <= 1;
-  return h(
+  const btn = h(
     'button',
     {
       class: 'btn dng',
@@ -155,22 +155,25 @@ function removeButton(method: MethodView): HTMLElement {
       'data-method-id': method.id,
       disabled: last,
       title: last ? 'The last way to unlock the list cannot be removed' : false,
-      onclick: () =>
-        guarded(`method-${method.id}`, () => {
-          void (async () => {
-            try {
-              await call({ type: 'removeMethod', id: method.id });
-              closePanel();
-              notice = method.type === 'password' ? 'Password removed.' : `${method.name ?? 'Key'} removed.`;
-            } catch (e) {
-              notice = messageOf(e);
-            }
-            await reload();
-          })();
-        }),
     },
     'Remove',
   );
+  btn.addEventListener('click', () =>
+    guarded(`method-${method.id}`, () => {
+      void (async () => {
+        btn.disabled = true;
+        try {
+          await call({ type: 'removeMethod', id: method.id });
+          closePanel();
+          notice = method.type === 'password' ? 'Password removed.' : `${method.name ?? 'Key'} removed.`;
+        } catch (e) {
+          notice = messageOf(e);
+        }
+        await reload();
+      })();
+    }),
+  );
+  return btn;
 }
 
 function passkeyRow(method: MethodView): HTMLElement {
@@ -191,8 +194,13 @@ function passkeyRow(method: MethodView): HTMLElement {
 function addKeyPanel(): HTMLElement {
   const error = h('p', { class: 'err', role: 'alert', style: 'margin:0' });
   const name = h('input', { type: 'text', value: 'Security key', 'aria-label': 'Key name', maxlength: 60, testid: 'zt-add-key-name' });
+  const hasHello = passkeys(state, 'platform').length > 0;
+  const helloBtn = h('button', { class: 'btn', type: 'button', testid: 'zt-add-hello' }, svg('hello', 16, 1.8), 'Add Windows Hello');
+  const keyBtn = h('button', { class: 'btn', type: 'button', testid: 'zt-add-security-key' }, svg('securityKey', 16, 1.8), 'Add security key');
   const add = async (kind: PasskeyKind): Promise<void> => {
     error.textContent = '';
+    helloBtn.disabled = true;
+    keyBtn.disabled = true;
     try {
       const passkey = await newPasskey(kind, kind === 'platform' ? 'Windows Hello' : name.value);
       await call({ type: 'addPasskey', passkey });
@@ -206,21 +214,22 @@ function addKeyPanel(): HTMLElement {
         return;
       }
       error.textContent = messageOf(e);
+      helloBtn.disabled = false;
+      keyBtn.disabled = false;
     }
   };
-  const hasHello = passkeys(state, 'platform').length > 0;
+  helloBtn.addEventListener('click', () => void add('platform'));
+  keyBtn.addEventListener('click', () => void add('cross-platform'));
   return h(
     'div',
     { class: 'panel', testid: 'zt-add-key' },
     h('div', { class: 'p' }, 'Choose what to add. Windows asks you to confirm with your face, fingerprint, PIN or key.'),
-    helloAvailable &&
-      !hasHello &&
-      h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', testid: 'zt-add-hello', onclick: () => void add('platform') }, svg('hello', 16, 1.8), 'Add Windows Hello')),
+    helloAvailable && !hasHello && h('div', { class: 'row' }, helloBtn),
     h(
       'div',
       { class: 'row' },
       h('div', { class: 'f', style: 'flex:1;min-width:200px' }, name),
-      h('button', { class: 'btn', type: 'button', testid: 'zt-add-security-key', onclick: () => void add('cross-platform') }, svg('securityKey', 16, 1.8), 'Add security key'),
+      keyBtn,
       h('button', { class: 'btn', type: 'button', onclick: () => (closePanel(), render()) }, 'Cancel'),
     ),
     error,
@@ -233,6 +242,7 @@ function passwordPanel(): HTMLElement {
   const form = passwordForm((ok) => (save.disabled = !ok));
   save.addEventListener('click', () => {
     void (async () => {
+      save.disabled = true;
       try {
         await call({ type: 'setPassword', password: form.value() });
         closePanel();
@@ -240,6 +250,7 @@ function passwordPanel(): HTMLElement {
         await reload();
       } catch (e) {
         error.textContent = messageOf(e);
+        save.disabled = false;
       }
     })();
   });
@@ -266,8 +277,43 @@ function recoveryPanel(code: string): HTMLElement {
   );
 }
 
+function newRecoveryButton(): HTMLElement {
+  const btn = h('button', { class: 'btn', type: 'button', testid: 'zt-new-recovery' }, 'Make a new code');
+  btn.addEventListener('click', () =>
+    guarded('recovery', () => {
+      void (async () => {
+        btn.disabled = true;
+        try {
+          const { code } = await call<{ code: string }>({ type: 'newRecoveryCode' });
+          state = await getState();
+          openPanel('recovery', recoveryPanel(code));
+        } catch (e) {
+          notice = messageOf(e);
+          await reload();
+        }
+      })();
+    }),
+  );
+  return btn;
+}
+
 function deletePanel(): HTMLElement {
   const error = h('p', { class: 'err', role: 'alert', style: 'margin:0' });
+  const confirm = h('button', { class: 'btn dng', type: 'button', testid: 'zt-delete-confirm' }, 'Delete my list');
+  confirm.addEventListener('click', () =>
+    void (async () => {
+      confirm.disabled = true;
+      try {
+        await call({ type: 'deleteAll' });
+        closePanel();
+        notice = 'Your list is deleted.';
+        await reload();
+      } catch (e) {
+        error.textContent = messageOf(e);
+        confirm.disabled = false;
+      }
+    })(),
+  );
   return h(
     'div',
     { class: 'panel', testid: 'zt-delete-panel' },
@@ -275,26 +321,7 @@ function deletePanel(): HTMLElement {
     h(
       'div',
       { class: 'row' },
-      h(
-        'button',
-        {
-          class: 'btn dng',
-          type: 'button',
-          testid: 'zt-delete-confirm',
-          onclick: () =>
-            void (async () => {
-              try {
-                await call({ type: 'deleteAll' });
-                closePanel();
-                notice = 'Your list is deleted.';
-                await reload();
-              } catch (e) {
-                error.textContent = messageOf(e);
-              }
-            })(),
-        },
-        'Delete my list',
-      ),
+      confirm,
       h('button', { class: 'btn', type: 'button', onclick: () => (closePanel(), render()) }, 'Cancel'),
     ),
     error,
@@ -378,28 +405,7 @@ function renderUnlocked(): HTMLElement {
         { class: 'r' },
         h('div', { class: 'ic' }, svg('recoveryKey', 20, 1.8)),
         h('div', { class: 't' }, h('b', {}, 'Recovery code'), h('span', {}, recovery ? `Made ${formatDate(recovery.createdAt)} · ${recoveryUse}` : 'Not made')),
-        h(
-          'button',
-          {
-            class: 'btn',
-            type: 'button',
-            testid: 'zt-new-recovery',
-            onclick: () =>
-              guarded('recovery', () => {
-                void (async () => {
-                  try {
-                    const { code } = await call<{ code: string }>({ type: 'newRecoveryCode' });
-                    state = await getState();
-                    openPanel('recovery', recoveryPanel(code));
-                  } catch (e) {
-                    notice = messageOf(e);
-                    await reload();
-                  }
-                })();
-              }),
-          },
-          'Make a new code',
-        ),
+        newRecoveryButton(),
         panelFor('recovery'),
       ),
       h(
