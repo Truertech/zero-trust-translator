@@ -68,3 +68,29 @@ export async function readRenderedName(page: Page, markerId: string): Promise<st
   const span = findNameSpan(host.shadowRoots[0]!);
   return span ? attribute(span, 'data-zt-name') : undefined;
 }
+
+/** Reads the page badge (`data-testid="zt-badge"`): its state class and its text, from inside its closed shadow root. */
+export async function readBadge(page: Page): Promise<{ state: string; text: string } | undefined> {
+  const cdp: CDPSession = await page.context().newCDPSession(page);
+  const { root } = await cdp.send('DOM.getDocument', { depth: -1, pierce: true });
+  let host: CdpNode | undefined;
+  for (const n of walk(root as CdpNode)) {
+    if (attribute(n, 'data-testid') === 'zt-badge') {
+      host = n;
+    }
+  }
+  if (!host?.shadowRoots?.[0]) {
+    return undefined;
+  }
+  let state = '';
+  let text = '';
+  for (const n of walk(host.shadowRoots[0])) {
+    if (attribute(n, 'id') === 'b') {
+      state = attribute(n, 'class') ?? '';
+    }
+    if (attribute(n, 'id') === 't') {
+      text = attribute(n, 'data-zt-text') ?? '';
+    }
+  }
+  return { state, text };
+}

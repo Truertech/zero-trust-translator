@@ -1,93 +1,81 @@
 /**
- * The id-to-name list, kept in `chrome.storage.local` only (#3786: never
- * `chrome.storage.sync`, so the list never leaves this computer).
+ * The list operations (#3797). The list itself lives only inside the vault
+ * (`vault.ts`): the service worker opens it with the data key, runs one of
+ * these pure functions on it, and seals the result again. Nothing here
+ * touches storage.
  */
-import type { PersonRecord } from './types';
+import { emptyPerson, emailKey, type PersonRecord, usernameKey } from './types';
 
-const STORAGE_KEY = 'zt-people-v1';
+/** The v0.1.0 key: a plain `{ lower-case id: name }` object. Read once at setup, then removed. */
+export const LEGACY_STORAGE_KEY = 'zt-people-v1';
 
-type StoredShape = Record<string, string>; // lower-case id -> name
+export const DUPLICATE_USERNAME_MESSAGE = 'This username is already in your list';
+export const MISSING_USERNAME_MESSAGE = 'Type a username or reference';
+export const MISSING_EMAIL_MESSAGE = 'Type an email address';
 
-async function readRaw(): Promise<StoredShape> {
-  const result = await chrome.storage.local.get(STORAGE_KEY);
-  const value = result[STORAGE_KEY];
-  return value && typeof value === 'object' ? (value as StoredShape) : {};
+/** A refused list change, with the message the popup shows. */
+export class ListError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ListError';
+  }
 }
 
-async function writeRaw(shape: StoredShape): Promise<void> {
-  await chrome.storage.local.set({ [STORAGE_KEY]: shape });
+export function sortPeople(people: PersonRecord[]): PersonRecord[] {
+  return [...people].sort((a, b) => (a.name || a.username).localeCompare(b.name || b.username));
 }
 
-// A second write started before the first finishes (a double click on Add,
-// or Add firing while a CSV import is still writing) must not read the list
-// before the first write lands, or the first write is lost: `writeRaw`
-// replaces the whole stored object, so the later write wins outright rather
-// than merging. `writeQueue` runs every read-modify-write one at a time.
-let writeQueue: Promise<void> = Promise.resolve();
-
-function serializeWrite(run: () => Promise<void>): Promise<void> {
-  const result = writeQueue.then(run, run);
-  writeQueue = result.catch(() => undefined);
-  return result;
-}
-
-export async function getAll(): Promise<PersonRecord[]> {
-  const raw = await readRaw();
-  return Object.entries(raw)
-    .map(([id, name]) => ({ id, name }))
-    .sort((a, b) => a.name.localeCompare(b.name));
-}
-
-/** The ids of `candidates` that already have a row in the list. */
-export async function findExistingIds(candidates: PersonRecord[]): Promise<string[]> {
-  const raw = await readRaw();
-  return candidates.map((c) => c.id).filter((id) => Object.prototype.hasOwnProperty.call(raw, id));
-}
-
-/** Adds every row, replacing any row that shares its id. Callers ask the user before calling this when `findExistingIds` is non-empty. */
-export async function upsertMany(people: PersonRecord[]): Promise<void> {
-  await serializeWrite(async () => {
-    const raw = await readRaw();
-    for (const person of people) {
-      raw[person.id] = person.name;
-    }
-    await writeRaw(raw);
-  });
-}
-
-export async function upsertOne(person: PersonRecord): Promise<void> {
-  await upsertMany([person]);
-}
-
-export async function deleteOne(id: string): Promise<void> {
-  await serializeWrite(async () => {
-    const raw = await readRaw();
-    delete raw[id.toLowerCase()];
-    await writeRaw(raw);
-  });
-}
-
-export async function deleteAll(): Promise<void> {
-  await serializeWrite(() => writeRaw({}));
-}
-
-export function search(people: PersonRecord[], query: string): PersonRecord[] {
+/** Filters by name or username as the admin types. */
+export function searchPeople(people: PersonRecord[], query: string): PersonRecord[] {
   const needle = query.trim().toLowerCase();
   if (needle.length === 0) {
     return people;
   }
-  return people.filter((p) => p.id.includes(needle) || p.name.toLowerCase().includes(needle));
+  return people.filter((p) => usernameKey(p.username).includes(needle) || p.name.toLowerCase().includes(needle));
 }
 
-/** Reads the current map straight from a `chrome.storage.onChanged` change record, with no extra read. */
-export function mapFromChange(change: chrome.storage.StorageChange | undefined): Map<string, string> {
-  const shape = (change?.newValue ?? {}) as StoredShape;
-  return new Map(Object.entries(shape));
+function hasUsername(people: PersonRecord[], username: string, except?: string): boolean {
+  const key = usernameKey(username);
+  return people.some((p) => usernameKey(p.username) === key && (except === undefined || usernameKey(p.username) !== usernameKey(except)));
 }
 
-export async function getAllAsMap(): Promise<Map<string, string>> {
-  const raw = await readRaw();
-  return new Map(Object.entries(raw));
+/** Adds a person with a username and an email. The name comes from the next import. */
+export function addPerson(people: PersonRecord[], username: string, email: string): PersonRecord[] {
+  const trimmed = username.trim();
+  if (trimmed.length === 0) {
+    throw new ListError(MISSING_USERNAME_MESSAGE);
+  }
+  if (!emailKey(email).includes('@')) {
+    throw new ListError(MISSING_EMAIL_MESSAGE);
+  }
+  if (hasUsername(people, trimmed)) {
+    throw new ListError(DUPLICATE_USERNAME_MESSAGE);
+  }
+  return [...people, { ...emptyPerson(trimmed), email: email.trim() }];
 }
 
-export const STORAGE_KEY_FOR_TESTS = STORAGE_KEY;
+/** Changes the username of one person. The only edit the popup allows (board 4). */
+export function renameUser(people: PersonRecord[], from: string, to: string): PersonRecord[] {
+  const trimmed = to.trim();
+  if (trimmed.length === 0) {
+    throw new ListError(MISSING_USERNAME_MESSAGE);
+  }
+  if (hasUsername(people, trimmed, from)) {
+    throw new ListError(DUPLICATE_USERNAME_MESSAGE);
+  }
+  return people.map((p) => (usernameKey(p.username) === usernameKey(from) ? { ...p, username: trimmed } : p));
+}
+
+export function removePerson(people: PersonRecord[], username: string): PersonRecord[] {
+  return people.filter((p) => usernameKey(p.username) !== usernameKey(username));
+}
+
+/** Reads the v0.1.0 plain list. Anything that is not an object of strings gives an empty list. */
+export function peopleFromLegacy(value: unknown): PersonRecord[] {
+  if (!value || typeof value !== 'object') {
+    return [];
+  }
+  return Object.entries(value as Record<string, unknown>)
+    .filter((entry): entry is [string, string] => typeof entry[1] === 'string')
+    .map(([id, name]) => ({ ...emptyPerson(id), name }));
+}

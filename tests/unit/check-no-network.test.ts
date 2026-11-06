@@ -58,9 +58,29 @@ describe('check-no-network.mjs', () => {
     expect(() => execFileSync(process.execPath, [SCRIPT, dir], { stdio: 'pipe' })).toThrow();
   });
 
-  it('does not scan a file that is read, not run, such as popup.html', () => {
+  it('passes on a page whose only remote address is the href of a link', () => {
     dir = mkdtempSync(join(tmpdir(), 'zt-no-network-'));
-    writeFileSync(join(dir, 'popup.html'), '<a href="https://github.com/Truertech/zero-trust-translator">source</a>');
+    writeFileSync(join(dir, 'popup.html'), '<a data-link="source" href="https://github.com/Truertech/zero-trust-translator">source</a><script src="popup.js"></script>');
+
+    expect(() => execFileSync(process.execPath, [SCRIPT, dir], { stdio: 'pipe' })).not.toThrow();
+  });
+
+  it.each([
+    ['popup.html', 'a remote image', '<img src="https://example.com/a.png">'],
+    ['options.html', 'a remote stylesheet', '<link rel="stylesheet" href="https://fonts.example.com/x.css">'],
+    ['unlock.html', 'a remote script', '<script src="https://example.com/x.js"></script>'],
+    ['popup.css', 'a remote font', '@font-face { src: url(https://fonts.example.com/f.woff2); }'],
+    ['options.css', 'a remote background image', '.x { background: url("http://example.com/a.png"); }'],
+  ])('fails on %s with %s', (name, _label, source) => {
+    dir = mkdtempSync(join(tmpdir(), 'zt-no-network-'));
+    writeFileSync(join(dir, name), source);
+
+    expect(() => execFileSync(process.execPath, [SCRIPT, dir], { stdio: 'pipe' })).toThrow();
+  });
+
+  it('does not refuse the word fetch( in a page text, only in a script', () => {
+    dir = mkdtempSync(join(tmpdir(), 'zt-no-network-'));
+    writeFileSync(join(dir, 'popup.html'), '<p>Nothing here calls fetch() or XMLHttpRequest.</p>');
 
     expect(() => execFileSync(process.execPath, [SCRIPT, dir], { stdio: 'pipe' })).not.toThrow();
   });

@@ -1,10 +1,10 @@
 /**
- * A small CSV reader and writer, written in this repository (issue #3786:
+ * A small CSV reader, written in this repository (issue #3786:
  * no CSV package is approved). Handles double-quoted fields, embedded
  * commas and doubled quotes (`""` inside a quoted field means one `"`).
  * Both `\n` and `\r\n` line endings are accepted.
  */
-import { MissingIdColumnError, type ParsedPeopleCsv, type PersonRecord } from './types';
+import { MissingIdColumnError, type ParsedPeopleCsv, type PersonKind, type PersonRecord, type SkippedRow } from './types';
 
 /** Splits CSV text into rows of raw string cells. Trailing blank lines are dropped. */
 export function parseCsvRows(text: string): string[][] {
@@ -68,70 +68,83 @@ export function parseCsvRows(text: string): string[][] {
 }
 
 /** Normalises a header cell the same way for every comparison: lower-case, no spaces. */
-function normaliseHeader(cell: string): string {
+export function normaliseHeader(cell: string): string {
   return cell.trim().toLowerCase().replace(/\s+/g, '');
 }
 
+const ID_HEADERS = ['username', 'reference', 'usernameorreference'];
+const KINDS: readonly PersonKind[] = ['user', 'member', 'respondent'];
+
+function readKind(raw: string): PersonKind {
+  const kind = raw.trim().toLowerCase() as PersonKind;
+  return KINDS.includes(kind) ? kind : '';
+}
+
+/** The index of the id column in a normalised header row, or -1. */
+export function idColumnIndex(header: string[]): number {
+  for (const name of ID_HEADERS) {
+    const index = header.indexOf(name);
+    if (index >= 0) {
+      return index;
+    }
+  }
+  return -1;
+}
+
 /**
- * Reads the extension's import format: the `people.csv` wipe export from
- * #3785, or any CSV with a `username`/`reference` column and a `name`
- * column, or both `first name` and `last name`.
+ * Reads the username-keyed formats: the `people.csv` wipe download from
+ * #3785 (`username, kind, email, first name, last name, phone, address,
+ * postcode`), or any CSV with a `username`/`reference` column and a `name`
+ * column, or `first name` and `last name` (#3786).
  *
- * Throws `MissingIdColumnError` when no column can serve as the id — the
+ * A row needs a username, and a name or an email: a person with an email
+ * and no name yet gets the name from the next NationBuilder import.
+ *
+ * Throws `MissingIdColumnError` when no column can serve as the id. The
  * popup shows that as one message and changes nothing in the list.
  */
 export function parsePeopleCsv(text: string): ParsedPeopleCsv {
-  const rows = parseCsvRows(text);
+  return parsePeopleRows(parseCsvRows(text));
+}
+
+export function parsePeopleRows(rows: string[][]): ParsedPeopleCsv {
   if (rows.length === 0) {
     throw new MissingIdColumnError();
   }
   const header = rows[0]!.map(normaliseHeader);
-  const idIndex = header.indexOf('username') >= 0 ? header.indexOf('username') : header.indexOf('reference');
+  const idIndex = idColumnIndex(header);
   if (idIndex < 0) {
     throw new MissingIdColumnError();
   }
-  const nameIndex = header.indexOf('name');
-  const firstNameIndex = header.indexOf('firstname');
-  const lastNameIndex = header.indexOf('lastname');
+  const column = (cells: string[], name: string): string => {
+    const index = header.indexOf(name);
+    return index >= 0 ? (cells[index] ?? '').trim() : '';
+  };
   const imported: PersonRecord[] = [];
-  const skipped: ParsedPeopleCsv['skipped'] = [];
+  const skipped: SkippedRow[] = [];
   for (let r = 1; r < rows.length; r += 1) {
     const cells = rows[r]!;
     const rowNumber = r + 1; // 1-based, header counted as row 1
-    const rawId = (cells[idIndex] ?? '').trim();
-    let rawName = '';
-    if (nameIndex >= 0) {
-      rawName = (cells[nameIndex] ?? '').trim();
-    } else if (firstNameIndex >= 0 || lastNameIndex >= 0) {
-      const first = (cells[firstNameIndex] ?? '').trim();
-      const last = (cells[lastNameIndex] ?? '').trim();
-      rawName = [first, last].filter((part) => part.length > 0).join(' ');
-    }
-    if (rawId.length === 0) {
-      skipped.push({ row: rowNumber, reason: 'empty id' });
+    const username = (cells[idIndex] ?? '').trim();
+    const name = column(cells, 'name') || [column(cells, 'firstname'), column(cells, 'lastname')].filter((part) => part.length > 0).join(' ');
+    const email = column(cells, 'email');
+    if (username.length === 0) {
+      skipped.push({ row: rowNumber, reason: 'no username', label: name || email });
       continue;
     }
-    if (rawName.length === 0) {
-      skipped.push({ row: rowNumber, reason: 'empty name' });
+    if (name.length === 0 && email.length === 0) {
+      skipped.push({ row: rowNumber, reason: 'no name or email', label: username });
       continue;
     }
-    imported.push({ id: rawId.toLowerCase(), name: rawName });
+    imported.push({
+      username,
+      name,
+      email,
+      phone: column(cells, 'phone'),
+      address: column(cells, 'address'),
+      postcode: column(cells, 'postcode'),
+      kind: readKind(column(cells, 'kind')),
+    });
   }
   return { imported, skipped };
-}
-
-function csvEscape(value: string): string {
-  if (/[",\n\r]/.test(value)) {
-    return `"${value.replace(/"/g, '""')}"`;
-  }
-  return value;
-}
-
-/** Writes the list back out in the same `username,name` shape the popup imports. */
-export function writePeopleCsv(people: PersonRecord[]): string {
-  const lines = ['username,name'];
-  for (const person of people) {
-    lines.push(`${csvEscape(person.id)},${csvEscape(person.name)}`);
-  }
-  return lines.join('\r\n') + '\r\n';
 }
