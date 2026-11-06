@@ -310,7 +310,7 @@ function header(encrypted: boolean): HTMLElement {
     'div',
     { class: 'top' },
     h('div', { class: 'logo' }, svg('shieldCheck', 20, 2.2)),
-    h('div', { style: 'flex:1' }, h('h1', {}, 'Security'), h('div', { class: 'sub' }, `Zero Trust Translator · v${state.version}`)),
+    h('div', { style: 'flex:1' }, h('h1', {}, 'Security'), h('div', { class: 'sub', testid: 'zt-version' }, `Zero Trust Translator · v${state.version}`)),
     h('span', { class: encrypted ? 'on' : 'on off' }, encrypted ? 'List encrypted' : 'Not set up'),
   );
 }

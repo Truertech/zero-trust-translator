@@ -76,7 +76,7 @@ function privacyBanner(): HTMLElement {
     { class: 'banner' },
     svg('lock', 20),
     h('div', { class: 't' }, 'Your list never leaves this computer'),
-    h('button', { class: 'link', type: 'button', onclick: showPrivacy }, 'How?'),
+    h('button', { class: 'link', type: 'button', testid: 'zt-privacy-link', onclick: showPrivacy }, 'How?'),
   );
 }
 
@@ -742,7 +742,7 @@ function showNbPreview(fileName: string, text: string, preview: Extract<CsvPrevi
   const summary = h('div', { testid: 'zt-import-summary' });
   const review = h('button', { class: 'btn pri', type: 'button', testid: 'zt-import-review' });
   const line = (label: string, value: number, extra: string, colour?: string) =>
-    h('div', { class: `ln ${extra}` }, h('span', {}, label), h('span', colour ? { style: `color:${colour}` } : {}, String(value)));
+    h('div', { class: `ln ${extra}`, testid: `zt-import-count-${label.toLowerCase().replace(/[^a-z]+/g, '-')}` }, h('span', {}, label), h('span', colour ? { style: `color:${colour}` } : {}, String(value)));
   const draw = (): void => {
     const { changed, upToDate } = countMatches(plan, fields);
     summary.replaceChildren(
@@ -880,7 +880,7 @@ function showResult(result: ImportResult): void {
             ...result.skipped.map((s) =>
               h(
                 'div',
-                { class: 'sk' },
+                { class: 'sk', testid: 'zt-skipped-row', 'data-row': s.row },
                 h('span', { class: 'n' }, `Row ${s.row}`),
                 h('span', { class: (s.label ?? '').includes('@') ? 'mono' : '' }, s.label ?? ''),
                 h('span', { class: 'why' }, s.reason),
