@@ -142,7 +142,7 @@ async function showSetup(): Promise<void> {
 
 function showSetupPassword(): void {
   const error = h('p', { class: 'err', testid: 'zt-setup-error', role: 'alert' });
-  const next = h('button', { class: 'btn pri', type: 'button', testid: 'zt-setup-continue', disabled: true }, 'Continue');
+  const next = h('button', { class: 'btn pri big', type: 'button', testid: 'zt-setup-continue', disabled: true }, 'Continue');
   const form = passwordForm((ok) => (next.disabled = !ok));
   next.addEventListener('click', () => {
     void (async () => {
@@ -287,7 +287,7 @@ function showLock(): void {
         h('div', { class: 'go top' }, ...buttons),
         error,
       ),
-      h('div', { class: 'ft' }, h('button', { class: 'link', type: 'button', testid: 'zt-unlock-recovery', onclick: showUnlockRecovery }, 'Use recovery code'), h('span', {}, lockReasonText())),
+      h('div', { class: 'ft lk' }, h('button', { class: 'link', type: 'button', testid: 'zt-unlock-recovery', onclick: showUnlockRecovery }, 'Use recovery code'), h('span', {}, lockReasonText())),
     ),
   );
 }
@@ -377,7 +377,7 @@ function showSecret(screen: SecretScreen): void {
 }
 
 function lockFooter(left: HTMLElement): HTMLElement {
-  return h('div', { class: 'ft' }, left, h('span', {}, lockReasonText()));
+  return h('div', { class: 'ft lk' }, left, h('span', {}, lockReasonText()));
 }
 
 function showUnlockPassword(): void {
@@ -538,7 +538,7 @@ function showPrivacy(): void {
       h(
         'div',
         { class: 'hero' },
-        svg('shieldLock', 30, 1.8),
+        svg('shieldLock', 23, 1.8),
         h('div', {}, h('div', { class: 'h' }, 'No data ever leaves this computer'), h('div', { class: 'p' }, 'Names stay on this PC. Not on our servers, not in your Google account.')),
       ),
       h(
@@ -705,7 +705,7 @@ function showImportChoose(message = ''): void {
   const drop = h(
     'div',
     { class: 'drop' },
-    svg('fileUpload', 32, 1.8),
+    svg('fileUpload', 30, 1.8),
     h('div', { class: 'h' }, 'Drop a CSV file here'),
     h('label', { class: 'btn pri' }, 'Choose file', input),
     h('div', { class: 'p' }, 'The file is read on this computer only'),
@@ -791,7 +791,7 @@ function showNbPreview(fileName: string, text: string, preview: Extract<CsvPrevi
         h(
           'div',
           { class: 'filebox' },
-          svg('file', 20),
+          svg('file', 22),
           h('div', { style: 'flex:1;min-width:0' }, h('div', { class: 'nm mono' }, fileName), h('div', { class: 'meta' }, `${preview.label} · ${plural(preview.rowCount, 'row', 'rows')}`)),
         ),
         summary,
