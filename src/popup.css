@@ -82,7 +82,6 @@ a:hover { color: #0B4F49; }
 .f { display: flex; flex-direction: column; gap: 6px; }
 .f label { font-size: 12px; font-weight: 600; color: #30353C; }
 .f input { font: inherit; font-size: 14px; height: 38px; padding: 0 10px; border: 1px solid #D5D2CA; border-radius: 8px; background: #fff; box-sizing: border-box; width: 100%; }
-.f input.mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
 .f input[aria-invalid="true"] { border-color: #B42318; }
 .ro { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding: 8px 0; border-bottom: 1px solid #EFEDE8; }
 .ro span:first-child { color: #57606A; }
@@ -171,7 +170,7 @@ a:hover { color: #0B4F49; }
 .way b { display: block; font-size: 14px; }
 .way span.d { font-size: 12px; color: #57606A; }
 .way .ic { width: 40px; height: 40px; border-radius: 10px; }
-.rec { font-size: 11px; font-weight: 600; color: #0B4F49; background: #E6F2EF; border-radius: 999px; padding: 2px 8px; margin-left: 6px; vertical-align: 1px; }
+.rec { font-size: 12px; font-weight: 600; color: #57606A; background: #E6F2EF; border-radius: 999px; padding: 2px 8px; margin-left: 6px; vertical-align: 1px; }
 .later { margin-top: auto; font-size: 12px; color: #57606A; text-align: center; }
 .dots { display: flex; gap: 6px; justify-content: center; }
 .dots i { width: 24px; height: 4px; border-radius: 2px; background: #D5D2CA; }
