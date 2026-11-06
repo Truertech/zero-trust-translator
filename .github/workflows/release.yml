@@ -70,24 +70,51 @@ jobs:
           CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
           CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
           CWS_EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+        # `curl -f` fails the step on an HTTP error status. The Store also
+        # answers a refused upload or publish with HTTP 200 and a failure in
+        # the body, so the step reads each body and fails unless it reports
+        # success.
         run: |
-          ACCESS_TOKEN=$(curl -s -X POST "https://oauth2.googleapis.com/token" \
+          set -euo pipefail
+
+          TOKEN_RESPONSE=$(curl -fsS -X POST "https://oauth2.googleapis.com/token" \
             -d "client_id=${CWS_CLIENT_ID}" \
             -d "client_secret=${CWS_CLIENT_SECRET}" \
             -d "refresh_token=${CWS_REFRESH_TOKEN}" \
-            -d "grant_type=refresh_token" | node -p "JSON.parse(require('fs').readFileSync(0)).access_token")
+            -d "grant_type=refresh_token")
+          ACCESS_TOKEN=$(printf '%s' "$TOKEN_RESPONSE" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0, 'utf8')).access_token ?? '')")
+          if [ -z "$ACCESS_TOKEN" ]; then
+            echo "The token request returned no access_token." >&2
+            exit 1
+          fi
+          echo "::add-mask::${ACCESS_TOKEN}"
 
-          curl -s -X PUT \
+          UPLOAD_RESPONSE=$(curl -fsS -X PUT \
             -H "Authorization: Bearer ${ACCESS_TOKEN}" \
             -H "x-goog-api-version: 2" \
             -T dist.zip \
-            "https://www.googleapis.com/upload/chromewebstore/v1.1/items/${CWS_EXTENSION_ID}"
+            "https://www.googleapis.com/upload/chromewebstore/v1.1/items/${CWS_EXTENSION_ID}")
+          echo "Upload response: ${UPLOAD_RESPONSE}"
+          printf '%s' "$UPLOAD_RESPONSE" | node -e "
+            const body = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+            if (body.uploadState !== 'SUCCESS') {
+              console.error('The Chrome Web Store refused the upload: uploadState is ' + body.uploadState + '.');
+              process.exit(1);
+            }"
 
-          curl -s -X POST \
+          PUBLISH_RESPONSE=$(curl -fsS -X POST \
             -H "Authorization: Bearer ${ACCESS_TOKEN}" \
             -H "x-goog-api-version: 2" \
             -H "Content-Length: 0" \
-            "https://www.googleapis.com/chromewebstore/v1.1/items/${CWS_EXTENSION_ID}/publish"
+            "https://www.googleapis.com/chromewebstore/v1.1/items/${CWS_EXTENSION_ID}/publish")
+          echo "Publish response: ${PUBLISH_RESPONSE}"
+          printf '%s' "$PUBLISH_RESPONSE" | node -e "
+            const body = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+            const status = Array.isArray(body.status) ? body.status : [body.status];
+            if (!status.includes('OK')) {
+              console.error('The Chrome Web Store refused the publish: status is ' + JSON.stringify(body.status) + '.');
+              process.exit(1);
+            }"
 
       - name: No Chrome Web Store secrets — skipping the upload
         if: ${{ env.HAS_CWS_SECRETS != 'true' }}
