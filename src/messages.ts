@@ -14,6 +14,12 @@ export type LockReason = 'idle' | 'pc-locked' | 'manual';
 export const AUTO_LOCK_CHOICES = [5, 15, 60, 240] as const;
 export type AutoLockMinutes = (typeof AUTO_LOCK_CHOICES)[number];
 
+/** A guarded action needs a check no older than this. */
+export const CHECK_WINDOW_MS = 300_000;
+
+/** How long a wrong-password lockout lasts, on the worker and in the popup's own countdown. */
+export const PASSWORD_LOCKOUT_MS = 300_000;
+
 export interface Settings {
   autoLockMinutes: AutoLockMinutes;
   lockWhenPcLocks: boolean;

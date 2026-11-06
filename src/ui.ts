@@ -4,7 +4,7 @@
  * markup of `icons.ts` goes in as HTML.
  */
 import { icon, type IconName } from './icons';
-import { CEREMONY_PORT, send, type CeremonyOp, type MethodView, type Response, type SecretMessage, type StateView } from './messages';
+import { CEREMONY_PORT, CHECK_WINDOW_MS, send, type CeremonyOp, type MethodView, type Response, type SecretMessage, type StateView } from './messages';
 import type { PasskeyKind } from './vault';
 import { NO_PRF_MESSAGE, NoPrfError, assertPasskey, registerPasskey, type RegisteredPasskey } from './webauthn';
 
@@ -99,8 +99,6 @@ export function autoLockLabel(minutes: number): string {
 export function peopleLabel(count: number): string {
   return count === 1 ? '1 person' : `${count} people`;
 }
-
-export const CHECK_WINDOW_MS = 300_000;
 
 /** Whether a guarded action can run now without a new check. */
 export function checkIsRecent(state: StateView): boolean {

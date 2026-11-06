@@ -4,7 +4,7 @@
  * (`background.ts`), which holds the data key while the list is unlocked.
  */
 import { countMatches, isBackupText, type CsvPreview, type ImportResult, type NbPlan } from './import';
-import type { SecretMessage, StateView } from './messages';
+import { PASSWORD_LOCKOUT_MS, type SecretMessage, type StateView } from './messages';
 import { passwordForm } from './password-form';
 import { searchPeople } from './store';
 import { DETAIL_FIELDS, type DetailField, type PersonKind, type PersonRecord } from './types';
@@ -364,7 +364,7 @@ function showSecret(screen: SecretScreen): void {
         submit.disabled = false;
         box.classList.add('bad');
         if (e instanceof RequestFailed && e.code === 'password-locked-out') {
-          lockOut(Date.now() + 300_000);
+          lockOut(Date.now() + PASSWORD_LOCKOUT_MS);
           return;
         }
         error.textContent = messageOf(e);
