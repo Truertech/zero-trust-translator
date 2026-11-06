@@ -82,6 +82,8 @@ a:hover { color: #0B4F49; }
 .f { display: flex; flex-direction: column; gap: 6px; }
 .f label { font-size: 12px; font-weight: 600; color: #30353C; }
 .f input { font: inherit; font-size: 14px; height: 38px; padding: 0 10px; border: 1px solid #D5D2CA; border-radius: 8px; background: #fff; box-sizing: border-box; width: 100%; }
+/* Board 17 focus style, used on every focused field (operator answer, 2026-11-06). */
+.f input:focus { outline: none; border: 1.5px solid #0F766E; box-shadow: 0 0 0 3px #CDE6E1; }
 .f input[aria-invalid="true"] { border-color: #B42318; }
 .ro { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding: 8px 0; border-bottom: 1px solid #EFEDE8; }
 .ro span:first-child { color: #57606A; }
