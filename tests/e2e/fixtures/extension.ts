@@ -11,7 +11,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
+// This file is three folders below the repository root.
+const ROOT = dirname(dirname(dirname(dirname(fileURLToPath(import.meta.url)))));
 const EXTENSION_PATH = join(ROOT, 'dist-dev');
 
 export const DEV_EXTENSION_ID: string = JSON.parse(
@@ -22,7 +23,10 @@ export const test = base.extend<{ context: BrowserContext; extensionId: string }
   // eslint-disable-next-line no-empty-pattern
   context: async ({}, use) => {
     const context = await chromium.launchPersistentContext('', {
-      args: [`--disable-extensions-except=${EXTENSION_PATH}`, `--load-extension=${EXTENSION_PATH}`, '--headless=new'],
+      // The "chromium" channel is the full browser in its new headless mode.
+      // Playwright's default headless shell does not load extensions.
+      channel: 'chromium',
+      args: [`--disable-extensions-except=${EXTENSION_PATH}`, `--load-extension=${EXTENSION_PATH}`],
     });
     await use(context);
     await context.close();

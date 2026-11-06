@@ -1,9 +1,10 @@
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { STORAGE_KEY_FOR_TESTS } from '../../src/store';
 import { readRenderedName } from './helpers/cdp-shadow';
 import { expect, test } from './fixtures/extension';
 
-const PEOPLE_CSV = join(__dirname, '..', 'fixtures', 'people.csv');
+const PEOPLE_CSV = join(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'people.csv');
 
 async function setPeople(page: import('@playwright/test').Page, people: Record<string, string>): Promise<void> {
   await page.evaluate(
@@ -97,7 +98,7 @@ test.describe('content script', () => {
     expect(JSON.stringify(captured)).not.toContain('Jane Example');
   });
 
-  test('the extension makes no network request', async ({ context, extensionId }) => {
+  test('the extension makes no network request', async ({ context, extensionId, baseURL }) => {
     const popup = await context.newPage();
     await popup.goto(`chrome-extension://${extensionId}/popup.html`);
     await setPeople(popup, { macc1: 'Jane Example' });
@@ -108,7 +109,8 @@ test.describe('content script', () => {
     await page.goto('/page.html');
     await expect.poll(() => readRenderedName(page, 'macc1')).toBe('Jane Example');
 
-    const foreign = requests.filter((url) => !url.startsWith('http://127.0.0.1'));
+    const fixtureOrigin = new URL(baseURL ?? '').origin;
+    const foreign = requests.filter((url) => new URL(url).origin !== fixtureOrigin);
     expect(foreign).toEqual([]);
   });
 });
@@ -151,6 +153,8 @@ test.describe('popup', () => {
     const popup = await context.newPage();
     await popup.goto(`chrome-extension://${extensionId}/popup.html`);
     await setPeople(popup, { macc1: 'Old Name' });
+    // The popup draws its list once when it opens; reopen it to show the seeded row.
+    await popup.reload();
 
     popup.once('dialog', (dialog) => dialog.dismiss());
     await popup.setInputFiles('#import-file', PEOPLE_CSV);
