@@ -48,6 +48,27 @@ describe('store', () => {
     expect(await store.getAll()).toEqual([]);
   });
 
+  it('keeps both rows when a second add starts before the first write finishes (double click)', async () => {
+    const first = store.upsertOne({ id: 'macc1', name: 'Jane Example' });
+    const second = store.upsertOne({ id: 'macc2', name: 'John Doe' });
+    await Promise.all([first, second]);
+
+    const people = await store.getAll();
+    expect(people.map((p) => p.id).sort()).toEqual(['macc1', 'macc2']);
+  });
+
+  it('keeps an add that starts while a delete is still writing', async () => {
+    await store.upsertOne({ id: 'macc1', name: 'Jane Example' });
+    await store.upsertOne({ id: 'macc2', name: 'John Doe' });
+
+    const del = store.deleteOne('macc1');
+    const add = store.upsertOne({ id: 'macc3', name: 'New Person' });
+    await Promise.all([del, add]);
+
+    const people = await store.getAll();
+    expect(people.map((p) => p.id).sort()).toEqual(['macc2', 'macc3']);
+  });
+
   it('searches by id or by name', () => {
     const people = [
       { id: 'macc1', name: 'Jane Example' },

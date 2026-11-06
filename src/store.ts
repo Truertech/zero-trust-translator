@@ -18,6 +18,19 @@ async function writeRaw(shape: StoredShape): Promise<void> {
   await chrome.storage.local.set({ [STORAGE_KEY]: shape });
 }
 
+// A second write started before the first finishes (a double click on Add,
+// or Add firing while a CSV import is still writing) must not read the list
+// before the first write lands, or the first write is lost: `writeRaw`
+// replaces the whole stored object, so the later write wins outright rather
+// than merging. `writeQueue` runs every read-modify-write one at a time.
+let writeQueue: Promise<void> = Promise.resolve();
+
+function serializeWrite(run: () => Promise<void>): Promise<void> {
+  const result = writeQueue.then(run, run);
+  writeQueue = result.catch(() => undefined);
+  return result;
+}
+
 export async function getAll(): Promise<PersonRecord[]> {
   const raw = await readRaw();
   return Object.entries(raw)
@@ -33,11 +46,13 @@ export async function findExistingIds(candidates: PersonRecord[]): Promise<strin
 
 /** Adds every row, replacing any row that shares its id. Callers ask the user before calling this when `findExistingIds` is non-empty. */
 export async function upsertMany(people: PersonRecord[]): Promise<void> {
-  const raw = await readRaw();
-  for (const person of people) {
-    raw[person.id] = person.name;
-  }
-  await writeRaw(raw);
+  await serializeWrite(async () => {
+    const raw = await readRaw();
+    for (const person of people) {
+      raw[person.id] = person.name;
+    }
+    await writeRaw(raw);
+  });
 }
 
 export async function upsertOne(person: PersonRecord): Promise<void> {
@@ -45,13 +60,15 @@ export async function upsertOne(person: PersonRecord): Promise<void> {
 }
 
 export async function deleteOne(id: string): Promise<void> {
-  const raw = await readRaw();
-  delete raw[id.toLowerCase()];
-  await writeRaw(raw);
+  await serializeWrite(async () => {
+    const raw = await readRaw();
+    delete raw[id.toLowerCase()];
+    await writeRaw(raw);
+  });
 }
 
 export async function deleteAll(): Promise<void> {
-  await writeRaw({});
+  await serializeWrite(() => writeRaw({}));
 }
 
 export function search(people: PersonRecord[], query: string): PersonRecord[] {
