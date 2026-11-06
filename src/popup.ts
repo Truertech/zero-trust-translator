@@ -316,7 +316,7 @@ function showSecret(screen: SecretScreen): void {
   });
   const box = h('div', { class: 'pwbox' }, input);
   if (isPassword) {
-    const eye = h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Show password' }, svg('eye', 18));
+    const eye = h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Show password', testid: 'zt-password-toggle' }, svg('eye', 18));
     eye.addEventListener('click', () => {
       const hidden = input.type === 'password';
       input.type = hidden ? 'text' : 'password';
@@ -559,7 +559,7 @@ function showPrivacy(): void {
         { class: 'warnbar' },
         svg('warning', 18, 2, '#8A4B00'),
         h('div', { class: 't' }, 'Removing the extension deletes the list.'),
-        h('button', { class: 'btn', type: 'button', onclick: () => void startExport() }, 'Export backup'),
+        h('button', { class: 'btn', type: 'button', testid: 'zt-export-backup', onclick: () => void startExport() }, 'Export backup'),
       ),
     ),
   );
@@ -633,7 +633,7 @@ function showEdit(person: PersonRecord): void {
         ),
         deleteBtn,
       ),
-      h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'button', onclick: () => void showMain() }, 'Cancel'), save),
+      h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'button', testid: 'zt-edit-cancel', onclick: () => void showMain() }, 'Cancel'), save),
     ),
   );
 }
@@ -668,7 +668,7 @@ function showAdd(): void {
         error,
         h('div', { class: 'note' }, svg('info', 18), h('span', {}, 'The name and the other details come from the next import of people.csv or a NationBuilder Export.')),
       ),
-      h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'button', onclick: () => void showMain() }, 'Cancel'), save),
+      h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'button', testid: 'zt-add-cancel', onclick: () => void showMain() }, 'Cancel'), save),
     ),
   );
 }
@@ -807,7 +807,7 @@ function showNbPreview(fileName: string, text: string, preview: Extract<CsvPrevi
           ),
         h('div', {}, h('div', { class: 'label' }, 'Fields to update'), h('div', { class: 'fields' }, ...fieldBoxes)),
       ),
-      h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'button', onclick: () => void showMain() }, 'Cancel'), review),
+      h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'button', testid: 'zt-import-preview-cancel', onclick: () => void showMain() }, 'Cancel'), review),
     ),
   );
   draw();
@@ -904,7 +904,7 @@ function showResult(result: ImportResult): void {
       h(
         'div',
         { class: 'actions' },
-        h('button', { class: 'btn', type: 'button', onclick: () => void startExport() }, 'Export backup'),
+        h('button', { class: 'btn', type: 'button', testid: 'zt-export-backup', onclick: () => void startExport() }, 'Export backup'),
         h('button', { class: 'btn pri', type: 'button', testid: 'zt-import-done', onclick: () => void showMain() }, 'Done'),
       ),
     ),

@@ -113,7 +113,7 @@ function checkPanel(then: () => void): HTMLElement {
       passkeys(state, 'platform').length > 0 && h('button', { class: 'btn', type: 'button', testid: 'zt-reauth-hello', onclick: () => void withKey('platform')() }, svg('hello', 16, 1.8), 'Windows Hello'),
       passkeys(state, 'cross-platform').length > 0 &&
         h('button', { class: 'btn', type: 'button', testid: 'zt-reauth-key', onclick: () => void withKey('cross-platform')() }, svg('securityKey', 16, 1.8), 'Security key'),
-      h('button', { class: 'btn', type: 'button', onclick: () => (closePanel(), render()) }, 'Cancel'),
+      h('button', { class: 'btn', type: 'button', testid: 'zt-reauth-cancel', onclick: () => (closePanel(), render()) }, 'Cancel'),
     ),
     passwordRow,
     error,
@@ -230,7 +230,7 @@ function addKeyPanel(): HTMLElement {
       { class: 'row' },
       h('div', { class: 'f', style: 'flex:1;min-width:200px' }, name),
       keyBtn,
-      h('button', { class: 'btn', type: 'button', onclick: () => (closePanel(), render()) }, 'Cancel'),
+      h('button', { class: 'btn', type: 'button', testid: 'zt-add-key-cancel', onclick: () => (closePanel(), render()) }, 'Cancel'),
     ),
     error,
   );
@@ -258,7 +258,7 @@ function passwordPanel(): HTMLElement {
     'div',
     { class: 'panel', testid: 'zt-password-panel' },
     h('div', { style: 'max-width:360px' }, form.element),
-    h('div', { class: 'row' }, save, h('button', { class: 'btn', type: 'button', onclick: () => (closePanel(), render()) }, 'Cancel')),
+    h('div', { class: 'row' }, save, h('button', { class: 'btn', type: 'button', testid: 'zt-password-cancel', onclick: () => (closePanel(), render()) }, 'Cancel')),
     error,
   );
 }
@@ -322,7 +322,7 @@ function deletePanel(): HTMLElement {
       'div',
       { class: 'row' },
       confirm,
-      h('button', { class: 'btn', type: 'button', onclick: () => (closePanel(), render()) }, 'Cancel'),
+      h('button', { class: 'btn', type: 'button', testid: 'zt-delete-cancel', onclick: () => (closePanel(), render()) }, 'Cancel'),
     ),
     error,
   );
