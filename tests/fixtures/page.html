@@ -7,12 +7,12 @@
   <body>
     <h1>Members</h1>
     <ul id="members">
-      <li><span data-zt-id="macc1" id="marker-macc1">Macc1</span></li>
-      <li><span data-zt-id="MACC2" id="marker-macc2">Macc2</span></li>
+      <li><span data-zt-id="macc1" id="marker-macc1" data-testid="marker-macc1">Macc1</span></li>
+      <li><span data-zt-id="MACC2" id="marker-macc2" data-testid="marker-macc2">Macc2</span></li>
       <li><span id="marker-no-id">No marker here</span></li>
     </ul>
     <div id="dynamic"></div>
-    <button id="add-marker-button" type="button">Add a marker</button>
+    <button id="add-marker-button" data-testid="add-marker-button" type="button">Add a marker</button>
     <script>
       // Stands in for "the page's own JavaScript": every check the E2E spec
       // runs against DOM isolation reads from what this script captured, not
@@ -23,6 +23,7 @@
       document.getElementById('add-marker-button').addEventListener('click', () => {
         const span = document.createElement('span');
         span.id = 'marker-macc3';
+        span.dataset.testid = 'marker-macc3';
         span.dataset.ztId = 'macc3';
         span.textContent = 'Macc3';
         document.getElementById('dynamic').appendChild(span);

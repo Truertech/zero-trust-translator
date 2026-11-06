@@ -7,12 +7,8 @@ export function passwordForm(onChange: (ok: boolean) => void): { element: HTMLEl
   const second = h('input', { id: 'p2', type: 'password', autocomplete: 'new-password', testid: 'zt-password-again' });
   const segments = [h('i'), h('i'), h('i'), h('i')];
   const strength = h('span', { class: 'strength', testid: 'zt-password-strength' });
-  const check = (label: string) => {
-    const text = h('span', {}, label);
-    const el = h('div', { class: 'ck no' }, svg('check', 14, 3), text);
-    return el;
-  };
-  const checks = [check('At least 12 characters'), check('Not a common password'), check('Both entries match')];
+  const check = (key: string, label: string) => h('div', { class: 'ck no', testid: `zt-password-check-${key}`, 'data-ok': 'false' }, svg('check', 14, 3), h('span', {}, label));
+  const checks = [check('length', 'At least 12 characters'), check('common', 'Not a common password'), check('match', 'Both entries match')];
   const update = (): void => {
     const value = first.value;
     const level = passwordStrength(value);
@@ -22,7 +18,10 @@ export function passwordForm(onChange: (ok: boolean) => void): { element: HTMLEl
     strength.style.color = level <= 1 ? '#B42318' : level === 2 ? '#8A4B00' : '#0B4F49';
     const { longEnough, notCommon } = checkPassword(value);
     const match = value.length > 0 && value === second.value;
-    [longEnough, notCommon, match].forEach((ok, i) => checks[i]!.classList.toggle('no', !ok));
+    [longEnough, notCommon, match].forEach((ok, i) => {
+      checks[i]!.classList.toggle('no', !ok);
+      checks[i]!.dataset.ok = String(ok);
+    });
     onChange(passwordAccepted(value) && match);
   };
   first.addEventListener('input', update);

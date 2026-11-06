@@ -175,7 +175,7 @@ async function showRecovery(): Promise<void> {
   const finish = h('button', { class: 'btn pri', type: 'button', testid: 'zt-finish', disabled: true }, 'Finish');
   const saved = h('input', { type: 'checkbox', testid: 'zt-recovery-saved' });
   const error = h('p', { class: 'err', role: 'alert' });
-  const copied = h('span', { class: 'step', role: 'status' });
+  const copied = h('span', { class: 'step', role: 'status', testid: 'zt-recovery-copied' });
   saved.addEventListener('change', () => (finish.disabled = !saved.checked));
   finish.addEventListener('click', () => {
     void (async () => {

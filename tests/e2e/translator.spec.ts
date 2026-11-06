@@ -93,12 +93,12 @@ test.describe('content script', () => {
 
     const page = await context.newPage();
     await page.goto('/page.html');
-    await page.locator('#add-marker-button').click();
+    await page.getByTestId('add-marker-button').click();
 
     // A person with no name is not drawn: the marker keeps the page's text.
     await expect.poll(() => readBadge(page)).toEqual({ state: 'unlocked', text: 'Names shown by Zero Trust Translator · 2 of 3 on this page' });
     expect(await readRenderedName(page, 'macc3')).toBeUndefined();
-    await expect(page.locator('#marker-macc3')).toHaveText('Macc3');
+    await expect(page.getByTestId('marker-macc3')).toHaveText('Macc3');
   });
 
   test("the page's own script cannot read the name through innerText, outerHTML or a capture-phase window listener", async ({ context, extensionId }) => {
@@ -110,7 +110,7 @@ test.describe('content script', () => {
     const innerText = await page.evaluate(() => document.documentElement.innerText);
     const outerHtml = await page.evaluate(() => document.documentElement.outerHTML);
     const captured = await page.evaluate(() => window.__capturedMessages);
-    const shadow = await page.locator('#marker-macc1').evaluate((el) => el.shadowRoot);
+    const shadow = await page.getByTestId('marker-macc1').evaluate((el) => el.shadowRoot);
 
     expect(innerText).not.toContain('Jane Example');
     expect(outerHtml).not.toContain('Jane Example');
@@ -129,7 +129,7 @@ test.describe('lock and unlock', () => {
     await popup.getByTestId('zt-lock').click();
     await expect(popup.getByTestId('zt-locked')).toBeVisible();
     await expect.poll(() => readRenderedName(page, 'macc1')).toBeUndefined();
-    await expect(page.locator('#marker-macc1')).toHaveText('Macc1');
+    await expect(page.getByTestId('marker-macc1')).toHaveText('Macc1');
     await expect.poll(() => readBadge(page)).toEqual({ state: 'locked', text: LOCKED_TEXT });
 
     await popup.getByTestId('zt-unlock-password').click();
@@ -222,7 +222,7 @@ test.describe('storage and network', () => {
     const options = await context.newPage();
     await options.goto(`chrome-extension://${extensionId}/options.html`);
 
-    await expect(options.getByText(/Zero Trust Translator · v\d+\.\d+\.\d+/)).toBeVisible();
+    await expect(options.getByTestId('zt-version')).toHaveText(/^Zero Trust Translator · v\d+\.\d+\.\d+$/);
     await expect(options.getByTestId('zt-remove-method')).toBeDisabled();
   });
 });
