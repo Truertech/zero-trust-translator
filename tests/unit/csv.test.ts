@@ -1,191 +1,186 @@
 import { describe, expect, it } from 'vitest';
-import { parsePeopleCsv, writePeopleCsv } from '../../src/csv';
+import { idColumnIndex, normaliseHeader, parseCsvRows, parsePeopleCsv, parsePeopleRows } from '../../src/csv';
 import { MissingIdColumnError } from '../../src/types';
 
-describe('parsePeopleCsv', () => {
-  it('imports every row with a name, from the #3785 wipe export columns', () => {
-    const csv = [
-      'username,kind,email,first name,last name,phone,address,postcode',
-      'Macc1,real,,Jane,Example,,,',
-      'Macc2,real,,John,Doe,,,',
-    ].join('\n');
+const PEOPLE_HEADER = 'username,kind,email,first name,last name,phone,address,postcode';
 
-    const { imported, skipped } = parsePeopleCsv(csv);
-
-    expect(imported).toEqual([
-      { id: 'macc1', name: 'Jane Example' },
-      { id: 'macc2', name: 'John Doe' },
+describe('parseCsvRows', () => {
+  it('splits plain rows and cells', () => {
+    expect(parseCsvRows('a,b\nc,d\n')).toEqual([
+      ['a', 'b'],
+      ['c', 'd'],
     ]);
-    expect(skipped).toEqual([]);
   });
 
-  it('accepts a "reference" id column and a combined "name" column', () => {
-    const csv = ['reference,name', 'anon-7,Reference Only'].join('\n');
-
-    const { imported } = parsePeopleCsv(csv);
-
-    expect(imported).toEqual([{ id: 'anon-7', name: 'Reference Only' }]);
-  });
-
-  it('matches headers case-insensitively and ignoring spaces', () => {
-    const csv = ['USERNAME, First Name , Last Name', 'Macc1,Jane,Example'].join('\n');
-
-    const { imported } = parsePeopleCsv(csv);
-
-    expect(imported).toEqual([{ id: 'macc1', name: 'Jane Example' }]);
-  });
-
-  it('lower-cases every imported id, so a marker matches case-insensitively', () => {
-    const csv = ['username,name', 'MACC1,Jane Example'].join('\n');
-
-    const { imported } = parsePeopleCsv(csv);
-
-    expect(imported[0]?.id).toBe('macc1');
-  });
-
-  it('skips a row with an empty id, and reports why', () => {
-    const csv = ['username,name', ',Jane Example'].join('\n');
-
-    const { imported, skipped } = parsePeopleCsv(csv);
-
-    expect(imported).toEqual([]);
-    expect(skipped).toEqual([{ row: 2, reason: 'empty id' }]);
-  });
-
-  it('skips a row with an empty name, and reports why', () => {
-    const csv = ['username,name', 'macc1,'].join('\n');
-
-    const { imported, skipped } = parsePeopleCsv(csv);
-
-    expect(imported).toEqual([]);
-    expect(skipped).toEqual([{ row: 2, reason: 'empty name' }]);
-  });
-
-  it('refuses a CSV with no username or reference column', () => {
-    expect(() => parsePeopleCsv(['name', 'Jane Example'].join('\n'))).toThrow(MissingIdColumnError);
-  });
-
-  it('refuses an empty file', () => {
-    expect(() => parsePeopleCsv('')).toThrow(MissingIdColumnError);
-  });
-
-  it('handles a quoted field with an embedded comma', () => {
-    const csv = ['username,name', '"macc1","Example, Jane"'].join('\n');
-
-    const { imported } = parsePeopleCsv(csv);
-
-    expect(imported).toEqual([{ id: 'macc1', name: 'Example, Jane' }]);
+  it('reads a quoted field with an embedded comma as one cell', () => {
+    expect(parseCsvRows('"Example, Jane",x')).toEqual([['Example, Jane', 'x']]);
   });
 
   it('reads a doubled quote inside a quoted field as one quote', () => {
-    const csv = ['username,name', 'macc1,"Jane ""JJ"" Example"'].join('\n');
-
-    const { imported } = parsePeopleCsv(csv);
-
-    expect(imported).toEqual([{ id: 'macc1', name: 'Jane "JJ" Example' }]);
-  });
-
-  it('accepts CRLF line endings and drops trailing blank lines', () => {
-    const csv = 'username,name\r\nmacc1,Jane Example\r\n\r\n\r\n';
-
-    const { imported, skipped } = parsePeopleCsv(csv);
-
-    expect(imported).toEqual([{ id: 'macc1', name: 'Jane Example' }]);
-    expect(skipped).toEqual([]);
+    expect(parseCsvRows('"Jane ""JJ"" Example"')).toEqual([['Jane "JJ" Example']]);
   });
 
   it('keeps a line break that sits inside a quoted field as part of the field', () => {
-    const csv = ['username,name', 'macc1,"Jane', 'Example"'].join('\n');
+    expect(parseCsvRows('"line one\nline two",b\n')).toEqual([['line one\nline two', 'b']]);
+  });
 
-    const { imported } = parsePeopleCsv(csv);
+  it('accepts CRLF line endings and drops trailing blank lines', () => {
+    expect(parseCsvRows('a,b\r\nc,d\r\n\r\n\r\n')).toEqual([
+      ['a', 'b'],
+      ['c', 'd'],
+    ]);
+  });
 
-    expect(imported).toEqual([{ id: 'macc1', name: 'Jane\nExample' }]);
+  it('drops a blank line between two rows', () => {
+    expect(parseCsvRows('a\n\nb')).toEqual([['a'], ['b']]);
   });
 
   it('reads the last row of a file that has no final line break', () => {
-    const { imported } = parsePeopleCsv('username,name\nmacc1,Jane Example');
-
-    expect(imported).toEqual([{ id: 'macc1', name: 'Jane Example' }]);
+    expect(parseCsvRows('a,b\nc,d')).toEqual([
+      ['a', 'b'],
+      ['c', 'd'],
+    ]);
   });
 
-  it('uses the username column when the file has both a username and a reference column', () => {
-    const csv = ['reference,username,name', 'ref-1,macc1,Jane Example'].join('\n');
-
-    const { imported } = parsePeopleCsv(csv);
-
-    expect(imported).toEqual([{ id: 'macc1', name: 'Jane Example' }]);
+  it('keeps an empty last cell after a trailing comma, with and without a final line break', () => {
+    expect(parseCsvRows('a,\n')).toEqual([['a', '']]);
+    expect(parseCsvRows('a,')).toEqual([['a', '']]);
   });
 
-  it('prefers a "name" column over "first name" and "last name"', () => {
-    const csv = ['username,first name,last name,name', 'macc1,Jane,Example,Preferred Name'].join('\n');
-
-    const { imported } = parsePeopleCsv(csv);
-
-    expect(imported).toEqual([{ id: 'macc1', name: 'Preferred Name' }]);
-  });
-
-  it('builds the name from "first name" alone or "last name" alone, with no stray space', () => {
-    const firstOnly = parsePeopleCsv(['username,first name', 'macc1,Jane'].join('\n'));
-    const lastOnly = parsePeopleCsv(['username,last name', 'macc2,Example'].join('\n'));
-
-    expect(firstOnly.imported).toEqual([{ id: 'macc1', name: 'Jane' }]);
-    expect(lastOnly.imported).toEqual([{ id: 'macc2', name: 'Example' }]);
-  });
-
-  it('skips every row as "empty name" when the file has no name column at all', () => {
-    const { imported, skipped } = parsePeopleCsv(['username,email', 'macc1,a@example.org'].join('\n'));
-
-    expect(imported).toEqual([]);
-    expect(skipped).toEqual([{ row: 2, reason: 'empty name' }]);
-  });
-
-  it('reads a row shorter than the header as having empty cells', () => {
-    const { skipped } = parsePeopleCsv(['name,username', 'Jane Example'].join('\n'));
-
-    expect(skipped).toEqual([{ row: 2, reason: 'empty id' }]);
-  });
-
-  it('trims spaces round the id and the name', () => {
-    const { imported } = parsePeopleCsv(['username,name', '  Macc1 ,  Jane Example  '].join('\n'));
-
-    expect(imported).toEqual([{ id: 'macc1', name: 'Jane Example' }]);
-  });
-
-  it('refuses a file of blank lines only', () => {
-    expect(() => parsePeopleCsv('\n\n\r\n')).toThrow(MissingIdColumnError);
+  it('returns no rows for an empty text', () => {
+    expect(parseCsvRows('')).toEqual([]);
   });
 });
 
-describe('writePeopleCsv', () => {
-  it('writes a header and one row per person', () => {
-    const csv = writePeopleCsv([{ id: 'macc1', name: 'Jane Example' }]);
+describe('normaliseHeader', () => {
+  it.each([
+    ['Username', 'username'],
+    ['  First Name  ', 'firstname'],
+    ['Username or\treference', 'usernameorreference'],
+  ])('reads %j as %j', (cell, expected) => {
+    expect(normaliseHeader(cell)).toBe(expected);
+  });
+});
 
-    expect(csv).toBe('username,name\r\nmacc1,Jane Example\r\n');
+describe('idColumnIndex', () => {
+  it.each([
+    [['name', 'username'], 1],
+    [['reference', 'name'], 0],
+    [['name', 'usernameorreference'], 1],
+    [['reference', 'username'], 1],
+    [['name', 'email'], -1],
+  ])('finds the id column of %j at %i, preferring username over reference', (header, expected) => {
+    expect(idColumnIndex(header)).toBe(expected);
+  });
+});
+
+describe('parsePeopleCsv', () => {
+  it('skips a row that ends before the username column, as a row with no username', () => {
+    expect(parsePeopleCsv('name,username\nJane Example\n')).toEqual({ imported: [], skipped: [{ row: 2, reason: 'no username', label: 'Jane Example' }] });
   });
 
-  it('quotes a name that contains a comma', () => {
-    const csv = writePeopleCsv([{ id: 'macc1', name: 'Example, Jane' }]);
+  it('imports every column of the #3785 people.csv wipe download', () => {
+    const text = `${PEOPLE_HEADER}\nMacc1,member,jane@example.org,Jane,Example,07700 900000,1 High Street,AB1 2CD\n`;
 
-    expect(csv).toBe('username,name\r\nmacc1,"Example, Jane"\r\n');
+    expect(parsePeopleCsv(text)).toEqual({
+      imported: [
+        {
+          username: 'Macc1',
+          kind: 'member',
+          email: 'jane@example.org',
+          name: 'Jane Example',
+          phone: '07700 900000',
+          address: '1 High Street',
+          postcode: 'AB1 2CD',
+        },
+      ],
+      skipped: [],
+    });
   });
 
-  it('quotes a value with a double quote and doubles the quote', () => {
-    const csv = writePeopleCsv([{ id: 'macc1', name: 'Jane "JJ" Example' }]);
+  it('accepts a "reference" id column and a combined "name" column, with headers in any case and spacing', () => {
+    const { imported } = parsePeopleCsv(' Reference , NAME \nR-7,Jane Example\n');
 
-    expect(csv).toBe('username,name\r\nmacc1,"Jane ""JJ"" Example"\r\n');
+    expect(imported).toEqual([{ username: 'R-7', name: 'Jane Example', email: '', phone: '', address: '', postcode: '', kind: '' }]);
   });
 
-  it('quotes a value with a line break', () => {
-    expect(writePeopleCsv([{ id: 'macc1', name: 'Jane\nExample' }])).toBe('username,name\r\nmacc1,"Jane\nExample"\r\n');
-    expect(writePeopleCsv([{ id: 'macc1', name: 'Jane\rExample' }])).toBe('username,name\r\nmacc1,"Jane\rExample"\r\n');
+  it('keeps the case of the username as it was imported', () => {
+    expect(parsePeopleCsv('username,name\nMaCC1,Jane\n').imported[0]!.username).toBe('MaCC1');
   });
 
-  it('writes a file that parsePeopleCsv reads back to the same list', () => {
-    const people = [
-      { id: 'macc1', name: 'Example, Jane' },
-      { id: 'macc2', name: 'John "JD" Doe' },
-    ];
+  it('prefers a "name" column over "first name" and "last name"', () => {
+    expect(parsePeopleCsv('username,name,first name,last name\nu1,Full Name,First,Last\n').imported[0]!.name).toBe('Full Name');
+  });
 
-    expect(parsePeopleCsv(writePeopleCsv(people)).imported).toEqual(people);
+  it.each([
+    ['first name alone', 'u1,Jane,', 'Jane'],
+    ['last name alone', 'u1,,Example', 'Example'],
+  ])('builds the name from %s, with no stray space', (_label, row, expected) => {
+    expect(parsePeopleCsv(`username,first name,last name\n${row}\n`).imported[0]!.name).toBe(expected);
+  });
+
+  it('imports a person with an email and no name, so the next NationBuilder import can add the name', () => {
+    const { imported, skipped } = parsePeopleCsv('username,email\nu1,jane@example.org\n');
+
+    expect(skipped).toEqual([]);
+    expect(imported[0]).toMatchObject({ username: 'u1', name: '', email: 'jane@example.org' });
+  });
+
+  it.each([
+    ['the name', 'username,name,email\n,Jane Example,jane@example.org\n', 'Jane Example'],
+    ['the email when there is no name', 'username,name,email\n,,jane@example.org\n', 'jane@example.org'],
+    ['nothing when there is no name and no email', 'username,name,email\n,,\n', ''],
+  ])('skips a row with no username, labelled with %s', (_label, text, label) => {
+    expect(parsePeopleCsv(text)).toEqual({ imported: [], skipped: [{ row: 2, reason: 'no username', label }] });
+  });
+
+  it('skips a row with no name and no email, labelled with the username', () => {
+    expect(parsePeopleCsv('username,name,email\nu1,Jane,\nu2,,\n').skipped).toEqual([{ row: 3, reason: 'no name or email', label: 'u2' }]);
+  });
+
+  it('skips every row when the file has no name and no email column', () => {
+    expect(parsePeopleCsv('username,phone\nu1,07700\n').skipped).toEqual([{ row: 2, reason: 'no name or email', label: 'u1' }]);
+  });
+
+  it.each([
+    ['member', 'member'],
+    ['USER', 'user'],
+    [' Respondent ', 'respondent'],
+    ['volunteer', ''],
+    ['', ''],
+  ])('reads the kind %j as %j', (raw, expected) => {
+    expect(parsePeopleCsv(`username,name,kind\nu1,Jane,${raw}\n`).imported[0]!.kind).toBe(expected);
+  });
+
+  it('reads a row shorter than the header as having empty cells', () => {
+    expect(parsePeopleCsv(`${PEOPLE_HEADER}\nu1,member,jane@example.org\n`).imported[0]).toEqual({
+      username: 'u1',
+      kind: 'member',
+      email: 'jane@example.org',
+      name: '',
+      phone: '',
+      address: '',
+      postcode: '',
+    });
+  });
+
+  it('trims spaces round every cell', () => {
+    expect(parsePeopleCsv('username,name,email\n  u1  ,  Jane  ,  jane@example.org  \n').imported[0]).toMatchObject({
+      username: 'u1',
+      name: 'Jane',
+      email: 'jane@example.org',
+    });
+  });
+
+  it.each([
+    ['an empty file', ''],
+    ['a file of blank lines only', '\n\r\n\n'],
+    ['a file with no username or reference column', 'name,email\nJane,jane@example.org\n'],
+  ])('refuses %s with MissingIdColumnError', (_label, text) => {
+    expect(() => parsePeopleCsv(text)).toThrow(MissingIdColumnError);
+  });
+
+  it('gives MissingIdColumnError the message the popup shows', () => {
+    expect(() => parsePeopleRows([])).toThrow('The file has no "username" or "reference" column.');
   });
 });

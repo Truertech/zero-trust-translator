@@ -130,7 +130,7 @@ export interface NbPlan {
  */
 function realValue(value: string, email: string): string {
   const trimmed = value.trim();
-  if (trimmed.toLowerCase() === 'unknown' || (email !== '' && emailKey(trimmed) === email)) {
+  if (trimmed.toLowerCase() === 'unknown' || emailKey(trimmed) === email) {
     return '';
   }
   return trimmed;

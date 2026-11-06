@@ -18,7 +18,7 @@ export function isCommonPassword(password: string): boolean {
     return true;
   }
   // One character typed over and over, or a run of the digit row.
-  if (/^(.)\1*$/.test(lower) || '12345678901234567890'.includes(lower) || '09876543210987654321'.includes(lower)) {
+  if (/^(.)\1*$/u.test(lower) || '12345678901234567890'.includes(lower) || '09876543210987654321'.includes(lower)) {
     return true;
   }
   return false;
@@ -27,7 +27,7 @@ export function isCommonPassword(password: string): boolean {
 export function checkPassword(password: string): PasswordChecks {
   return {
     longEnough: [...password].length >= MIN_PASSWORD_LENGTH,
-    notCommon: password.length > 0 && !isCommonPassword(password),
+    notCommon: !isCommonPassword(password),
   };
 }
 

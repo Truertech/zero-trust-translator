@@ -59,6 +59,8 @@ export const LOCKOUT_KEY = 'zt-lockout-v1';
 export const UNLOCKED_KEY = 'zt-unlocked-v1';
 export const SETUP_KEY = 'zt-setup-v1';
 export const LOCK_REASON_KEY = 'zt-lock-reason-v1';
+/** When the PC locked, if "Lock when this PC locks" is off. Cleared by a lock. */
+export const PC_LOCKED_AT_KEY = 'zt-pc-locked-at-v1';
 
 /** A guarded action needs a check no older than this. */
 export const CHECK_WINDOW_MS = 300_000;
@@ -193,7 +195,7 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
   // the same vault and lose the first write.
   let queue: Promise<unknown> = Promise.resolve();
   function serialize<T>(run: () => Promise<T>): Promise<T> {
-    const result = queue.then(run, run);
+    const result = queue.then(run);
     queue = result.catch(() => undefined);
     return result;
   }
@@ -511,6 +513,8 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
       }
 
       case 'lock':
+        // A lock in setup would clear the setup in progress.
+        await requireVault();
         await lock('manual');
         return {};
 
@@ -664,7 +668,7 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
   }
 
   function fromExtensionPage(sender: MessageSender): boolean {
-    return sender.id === api.runtime.id && typeof sender.url === 'string' && sender.url.startsWith(api.runtime.getURL(''));
+    return typeof sender.url === 'string' && sender.url.startsWith(api.runtime.getURL(''));
   }
 
   function failure(error: unknown): Failure {
@@ -680,7 +684,9 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
     if (error instanceof BackupFormatError) {
       return { ok: false, error: 'bad-file', message: error.message };
     }
-    throw error;
+    // Any other error (a secret that is not base64, a value of the wrong
+    // type) still answers the page, so the page never waits for nothing.
+    return { ok: false, error: 'invalid', message: MESSAGES.invalid };
   }
 
   async function handle(request: Request, sender: MessageSender): Promise<unknown> {
@@ -705,10 +711,21 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
     if (!(await unlocked())) {
       return;
     }
+    const current = await settings();
     if (idleState === 'idle') {
       await lock('idle');
-    } else if (idleState === 'locked' && (await settings()).lockWhenPcLocks) {
+    } else if (idleState === 'locked' && current.lockWhenPcLocks) {
       await lock('pc-locked');
+    } else if (idleState === 'locked') {
+      // Chrome reports "locked", never "idle", while the PC is locked, so
+      // the auto-lock time is counted from here and checked on return.
+      await session.set({ [PC_LOCKED_AT_KEY]: now() });
+    } else if (idleState === 'active') {
+      const lockedAt = await read<number>(session, PC_LOCKED_AT_KEY);
+      await session.remove(PC_LOCKED_AT_KEY);
+      if (lockedAt !== undefined && now() - lockedAt >= current.autoLockMinutes * 60_000) {
+        await lock('idle');
+      }
     }
   }
 

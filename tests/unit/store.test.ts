@@ -1,183 +1,148 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import * as store from '../../src/store';
-import { type FakeChromeStorage, installFakeChromeStorage } from './chrome-storage.fake';
+import { describe, expect, it } from 'vitest';
+import {
+  DUPLICATE_USERNAME_MESSAGE,
+  LEGACY_STORAGE_KEY,
+  ListError,
+  MISSING_EMAIL_MESSAGE,
+  MISSING_USERNAME_MESSAGE,
+  addPerson,
+  peopleFromLegacy,
+  removePerson,
+  renameUser,
+  searchPeople,
+  sortPeople,
+} from '../../src/store';
+import { emailKey, emptyPerson, type PersonRecord, usernameKey } from '../../src/types';
 
-let fake: FakeChromeStorage;
+function person(username: string, name = '', email = ''): PersonRecord {
+  return { ...emptyPerson(username), name, email };
+}
 
-beforeEach(() => {
-  fake = installFakeChromeStorage();
+const jane = person('Macc1', 'Jane Example', 'jane@example.org');
+const bob = person('macc2', 'Bob Sample', 'bob@example.org');
+
+describe('types helpers', () => {
+  it('compares usernames and emails trimmed and lower-case', () => {
+    expect(usernameKey('  MaCC1 ')).toBe('macc1');
+    expect(emailKey(' Jane@Example.ORG ')).toBe('jane@example.org');
+  });
+
+  it('makes an empty person with only the username set', () => {
+    expect(emptyPerson('u1')).toEqual({ username: 'u1', name: '', email: '', phone: '', address: '', postcode: '', kind: '' });
+  });
 });
 
-describe('store', () => {
-  it('adds a new row', async () => {
-    await store.upsertOne({ id: 'macc1', name: 'Jane Example' });
-
-    expect(await store.getAll()).toEqual([{ id: 'macc1', name: 'Jane Example' }]);
+describe('message constants', () => {
+  it('keeps the words the popup shows', () => {
+    expect(LEGACY_STORAGE_KEY).toBe('zt-people-v1');
+    expect(DUPLICATE_USERNAME_MESSAGE).toBe('This username is already in your list');
+    expect(MISSING_USERNAME_MESSAGE).toBe('Type a username or reference');
+    expect(MISSING_EMAIL_MESSAGE).toBe('Type an email address');
   });
 
-  it('replaces a row with the same id', async () => {
-    await store.upsertOne({ id: 'macc1', name: 'Jane Example' });
-    await store.upsertOne({ id: 'macc1', name: 'Jane Changed' });
+  it('makes a ListError with its name and message', () => {
+    const error = new ListError('x');
 
-    expect(await store.getAll()).toEqual([{ id: 'macc1', name: 'Jane Changed' }]);
+    expect(error).toBeInstanceOf(Error);
+    expect(error.name).toBe('ListError');
+    expect(error.message).toBe('x');
+  });
+});
+
+describe('sortPeople', () => {
+  it('sorts by name, and by username for a person with no name, without changing the input', () => {
+    const noName = person('anna');
+    const input = [jane, noName, bob];
+
+    expect(sortPeople(input).map((p) => p.username)).toEqual(['anna', 'macc2', 'Macc1']);
+    expect(input).toEqual([jane, noName, bob]);
+  });
+});
+
+describe('searchPeople', () => {
+  it.each([
+    ['part of a name, in any case', 'EXAMPLE', ['Macc1']],
+    ['part of a username, in any case', 'MACC2', ['macc2']],
+    ['a query with spaces round it', '  bob  ', ['macc2']],
+    ['a query that matches nobody', 'zzz', []],
+  ])('filters by %s', (_label, query, expected) => {
+    expect(searchPeople([jane, bob], query).map((p) => p.username)).toEqual(expected);
   });
 
-  it('reports which of a set of candidate ids already exist, so the popup can ask before it replaces them', async () => {
-    await store.upsertOne({ id: 'macc1', name: 'Jane Example' });
+  it.each(['', '   '])('returns the whole list for the empty query %j', (query) => {
+    const people = [jane, bob];
 
-    const existing = await store.findExistingIds([
-      { id: 'macc1', name: 'ignored' },
-      { id: 'macc2', name: 'ignored' },
-    ]);
+    expect(searchPeople(people, query)).toBe(people);
+  });
+});
 
-    expect(existing).toEqual(['macc1']);
+describe('addPerson', () => {
+  it('adds a trimmed username and email with every other field empty, without changing the input', () => {
+    const input = [jane];
+
+    expect(addPerson(input, '  macc3 ', ' new@example.org ')).toEqual([jane, person('macc3', '', 'new@example.org')]);
+    expect(input).toEqual([jane]);
   });
 
-  it('deletes one row by id', async () => {
-    await store.upsertOne({ id: 'macc1', name: 'Jane Example' });
-    await store.upsertOne({ id: 'macc2', name: 'John Doe' });
+  it.each([
+    ['an empty username', '', 'a@example.org', MISSING_USERNAME_MESSAGE],
+    ['a username of spaces', '   ', 'a@example.org', MISSING_USERNAME_MESSAGE],
+    ['an empty email', 'macc3', '', MISSING_EMAIL_MESSAGE],
+    ['an email with no @', 'macc3', 'example.org', MISSING_EMAIL_MESSAGE],
+    ['a username already in the list, in another case', ' MACC1 ', 'a@example.org', DUPLICATE_USERNAME_MESSAGE],
+  ])('refuses %s', (_label, username, email, message) => {
+    expect(() => addPerson([jane], username, email)).toThrow(new ListError(message));
+  });
+});
 
-    await store.deleteOne('macc1');
-
-    expect(await store.getAll()).toEqual([{ id: 'macc2', name: 'John Doe' }]);
+describe('renameUser', () => {
+  it('changes the username of the person found in any case, and keeps every other field', () => {
+    expect(renameUser([jane, bob], 'MACC1', ' macc9 ')).toEqual([{ ...jane, username: 'macc9' }, bob]);
   });
 
-  it('deletes the whole list', async () => {
-    await store.upsertOne({ id: 'macc1', name: 'Jane Example' });
-
-    await store.deleteAll();
-
-    expect(await store.getAll()).toEqual([]);
+  it('lets a person keep the same username with a new case', () => {
+    expect(renameUser([jane, bob], 'Macc1', 'MACC1')).toEqual([{ ...jane, username: 'MACC1' }, bob]);
   });
 
-  it('keeps both rows when a second add starts before the first write finishes (double click)', async () => {
-    const first = store.upsertOne({ id: 'macc1', name: 'Jane Example' });
-    const second = store.upsertOne({ id: 'macc2', name: 'John Doe' });
-    await Promise.all([first, second]);
-
-    const people = await store.getAll();
-    expect(people.map((p) => p.id).sort()).toEqual(['macc1', 'macc2']);
+  it('changes nothing when the old username is not in the list', () => {
+    expect(renameUser([jane, bob], 'nobody', 'macc9')).toEqual([jane, bob]);
   });
 
-  it('keeps an add that starts while a delete is still writing', async () => {
-    await store.upsertOne({ id: 'macc1', name: 'Jane Example' });
-    await store.upsertOne({ id: 'macc2', name: 'John Doe' });
+  it.each([
+    ['an empty username', '', MISSING_USERNAME_MESSAGE],
+    ['a username of spaces', '  ', MISSING_USERNAME_MESSAGE],
+    ['a username already in the list', 'Macc2', DUPLICATE_USERNAME_MESSAGE],
+  ])('refuses %s', (_label, to, message) => {
+    expect(() => renameUser([jane, bob], 'Macc1', to)).toThrow(new ListError(message));
+  });
+});
 
-    const del = store.deleteOne('macc1');
-    const add = store.upsertOne({ id: 'macc3', name: 'New Person' });
-    await Promise.all([del, add]);
-
-    const people = await store.getAll();
-    expect(people.map((p) => p.id).sort()).toEqual(['macc2', 'macc3']);
+describe('removePerson', () => {
+  it('removes the person given in any case and keeps the others', () => {
+    expect(removePerson([jane, bob], ' MACC1 ')).toEqual([bob]);
   });
 
-  it('searches by id or by name', () => {
-    const people = [
-      { id: 'macc1', name: 'Jane Example' },
-      { id: 'macc2', name: 'John Doe' },
-    ];
+  it('changes nothing when the username is not in the list', () => {
+    expect(removePerson([jane, bob], 'nobody')).toEqual([jane, bob]);
+  });
+});
 
-    expect(store.search(people, 'jane')).toEqual([people[0]]);
-    expect(store.search(people, 'macc2')).toEqual([people[1]]);
-    expect(store.search(people, '')).toEqual(people);
+describe('peopleFromLegacy', () => {
+  it('reads the v0.1.0 map from id to name, and drops a value that is not a string', () => {
+    expect(peopleFromLegacy({ macc1: 'Jane Example', macc2: 7, macc3: null })).toEqual([person('macc1', 'Jane Example')]);
   });
 
-  it('searches names case-insensitively and ignores spaces round the query', () => {
-    const people = [
-      { id: 'macc1', name: 'Jane Example' },
-      { id: 'macc2', name: 'John Doe' },
-    ];
-
-    expect(store.search(people, '  JANE ')).toEqual([people[0]]);
-    expect(store.search(people, '   ')).toEqual(people);
-    expect(store.search(people, 'nobody')).toEqual([]);
+  it.each([
+    ['undefined', undefined],
+    ['null', null],
+    ['an empty string', ''],
+    ['a string', 'Jane'],
+    ['a number', 5],
+  ])('reads an empty list from %s', (_label, value) => {
+    expect(peopleFromLegacy(value)).toEqual([]);
   });
 
-  it('lists people sorted by name', async () => {
-    await store.upsertOne({ id: 'macc2', name: 'Zoe Last' });
-    await store.upsertOne({ id: 'macc1', name: 'Adam First' });
-
-    expect((await store.getAll()).map((p) => p.name)).toEqual(['Adam First', 'Zoe Last']);
-  });
-
-  it('reads an empty list when nothing has been stored yet', async () => {
-    expect(await store.getAll()).toEqual([]);
-    expect((await store.getAllAsMap()).size).toBe(0);
-  });
-
-  it('reads an empty list, and does not throw, when the stored value is not an object', async () => {
-    fake.seed(store.STORAGE_KEY_FOR_TESTS, 'not an object');
-
-    expect(await store.getAll()).toEqual([]);
-  });
-
-  it('reads the list as a map from id to name', async () => {
-    await store.upsertOne({ id: 'macc1', name: 'Jane Example' });
-
-    expect([...(await store.getAllAsMap()).entries()]).toEqual([['macc1', 'Jane Example']]);
-  });
-
-  it('deletes a row when the id is given in a different case', async () => {
-    await store.upsertOne({ id: 'macc1', name: 'Jane Example' });
-
-    await store.deleteOne('MACC1');
-
-    expect(await store.getAll()).toEqual([]);
-  });
-
-  it('does not report a built-in object property name as an existing id', async () => {
-    const existing = await store.findExistingIds([{ id: 'constructor', name: 'ignored' }]);
-
-    expect(existing).toEqual([]);
-  });
-
-  it('adds every row of a many-row import in one call', async () => {
-    await store.upsertMany([
-      { id: 'macc1', name: 'Jane Example' },
-      { id: 'macc2', name: 'John Doe' },
-    ]);
-
-    expect((await store.getAll()).map((p) => p.id).sort()).toEqual(['macc1', 'macc2']);
-  });
-
-  it('rejects a write the browser refused, and still runs the next write', async () => {
-    fake.failNextSet(new Error('QUOTA_BYTES quota exceeded'));
-
-    await expect(store.upsertOne({ id: 'macc1', name: 'Jane Example' })).rejects.toThrow('QUOTA_BYTES');
-    await store.upsertOne({ id: 'macc2', name: 'John Doe' });
-
-    expect(await store.getAll()).toEqual([{ id: 'macc2', name: 'John Doe' }]);
-  });
-
-  it('runs a delete-all clicked while an add is still writing after the add, so the list ends empty', async () => {
-    await store.upsertOne({ id: 'macc1', name: 'Jane Example' });
-
-    const add = store.upsertOne({ id: 'macc2', name: 'John Doe' });
-    const clear = store.deleteAll();
-    await Promise.all([add, clear]);
-
-    expect(await store.getAll()).toEqual([]);
-  });
-
-  it('keeps an add when a delete is clicked while the add is still writing', async () => {
-    await store.upsertOne({ id: 'macc1', name: 'Jane Example' });
-    await store.upsertOne({ id: 'macc2', name: 'John Doe' });
-
-    const add = store.upsertOne({ id: 'macc3', name: 'New Person' });
-    const del = store.deleteOne('macc1');
-    await Promise.all([add, del]);
-
-    expect((await store.getAll()).map((p) => p.id).sort()).toEqual(['macc2', 'macc3']);
-  });
-
-  it('reads the new list from a storage change record', () => {
-    const map = store.mapFromChange({ newValue: { macc1: 'Jane Example' } });
-
-    expect([...map.entries()]).toEqual([['macc1', 'Jane Example']]);
-  });
-
-  it('reads an empty list from a change record that removed the key, or from no record', () => {
-    expect(store.mapFromChange({ oldValue: { macc1: 'Jane Example' } }).size).toBe(0);
-    expect(store.mapFromChange(undefined).size).toBe(0);
+  it('does not read a built-in object property name as a person', () => {
+    expect(peopleFromLegacy({})).toEqual([]);
   });
 });
