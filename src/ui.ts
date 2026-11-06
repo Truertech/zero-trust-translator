@@ -129,15 +129,46 @@ export async function withCeremony<T>(op: CeremonyOp, kind: PasskeyKind, run: ()
   }
 }
 
+/**
+ * Chrome allows only one `navigator.credentials` dialog per page, but a
+ * second click on an unlock, check or setup button (no dialog yet showing)
+ * would still start a second one, and Chrome then cancels the FIRST dialog
+ * with a confusing error. This keeps every passkey call in this extension
+ * to one at a time, so a second click fails fast with a clear message
+ * instead of cancelling the one already running.
+ */
+let ceremonyBusy = false;
+
+export class CeremonyBusyError extends Error {
+  constructor() {
+    super('A Windows Hello or security key check is already running. Finish it, then try again.');
+    this.name = 'CeremonyBusyError';
+  }
+}
+
+async function exclusiveCeremony<T>(run: () => Promise<T>): Promise<T> {
+  if (ceremonyBusy) {
+    throw new CeremonyBusyError();
+  }
+  ceremonyBusy = true;
+  try {
+    return await run();
+  } finally {
+    ceremonyBusy = false;
+  }
+}
+
 /** Asks one of the passkeys of `kind` and returns the secret for the service worker. */
 export async function passkeySecret(state: StateView, kind: PasskeyKind): Promise<SecretMessage> {
-  const asserted = await assertPasskey(passkeys(state, kind).map((m) => ({ credentialId: m.credentialId ?? '', prfSalt: m.prfSalt ?? '' })));
-  return { type: 'passkey', credentialId: asserted.credentialId, prfOutput: asserted.prfOutput };
+  return exclusiveCeremony(async () => {
+    const asserted = await assertPasskey(passkeys(state, kind).map((m) => ({ credentialId: m.credentialId ?? '', prfSalt: m.prfSalt ?? '' })));
+    return { type: 'passkey', credentialId: asserted.credentialId, prfOutput: asserted.prfOutput };
+  });
 }
 
 /** Makes a new passkey, with a name for board 18. */
 export async function newPasskey(kind: PasskeyKind, name: string): Promise<RegisteredPasskey & { name: string }> {
-  return { ...(await registerPasskey(kind)), name };
+  return exclusiveCeremony(async () => ({ ...(await registerPasskey(kind)), name }));
 }
 
 /** The text to show for a failed WebAuthn dialog. The admin closing the dialog shows nothing. */
