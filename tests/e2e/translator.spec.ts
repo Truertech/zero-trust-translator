@@ -77,6 +77,23 @@ test.describe('content script', () => {
     await expect.poll(() => readRenderedName(page, 'macc1')).toBe('Jane Example');
   });
 
+  test('reverts to the page\'s own text when the person is deleted from the list, with no reload', async ({
+    context,
+    extensionId,
+  }) => {
+    const popup = await context.newPage();
+    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
+    await setPeople(popup, { macc1: 'Jane Example' });
+
+    const page = await context.newPage();
+    await page.goto('/page.html');
+    await expect.poll(() => readRenderedName(page, 'macc1')).toBe('Jane Example');
+
+    await setPeople(popup, {});
+
+    await expect.poll(() => readRenderedName(page, 'macc1')).toBe('Macc1');
+  });
+
   test("the page's own script cannot read the name through innerText, outerHTML or a capture-phase window listener", async ({
     context,
     extensionId,

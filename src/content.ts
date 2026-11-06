@@ -24,8 +24,13 @@
 import { getAllAsMap, mapFromChange, STORAGE_KEY_FOR_TESTS } from './store';
 
 const MARKER_SELECTOR = '[data-zt-id]';
+// `WeakMap`, never a plain `Map` or `Set`: a page like this one replaces
+// marker elements often (React re-renders the members list on every page the
+// admin visits in a session left open all day). A `Set` of elements would
+// keep every removed element reachable forever, so it would never free, and
+// an admin's long session would grow it without bound. A `WeakMap` drops its
+// entry the moment nothing else holds the element.
 const nameSpans = new WeakMap<Element, HTMLSpanElement>();
-const knownMarkers = new Set<Element>();
 
 let people: Map<string, string> = new Map();
 
@@ -44,33 +49,34 @@ function render(el: Element): void {
     return;
   }
   const name = people.get(id);
-  if (name === undefined) {
-    return; // "A marker whose id is not in the list stays as the page drew it."
-  }
   let span = nameSpans.get(el);
   if (!span) {
+    if (name === undefined) {
+      return; // Never matched: leave the page's own light DOM showing, as it drew it.
+    }
+    // Attaching a shadow root with no `<slot>` stops the page's own light-DOM
+    // text from rendering at all, for good — a shadow root cannot be
+    // detached. So the marker's own text is read and kept here BEFORE that
+    // happens, as the fallback to show if the person is later deleted from
+    // the list: without it, a deleted person's name would stay drawn in
+    // forever, because nothing would be left to revert to.
+    const fallback = el.textContent ?? '';
     const shadow = el.attachShadow({ mode: 'closed' });
     const style = document.createElement('style');
     style.textContent = '#zt-name::before { content: attr(data-zt-name); }';
     span = document.createElement('span');
     span.id = 'zt-name';
+    span.dataset.ztFallback = fallback;
     shadow.append(style, span);
     nameSpans.set(el, span);
   }
-  span.setAttribute('data-zt-name', name);
+  span.setAttribute('data-zt-name', name ?? span.dataset['ztFallback'] ?? '');
 }
 
 function scan(root: ParentNode): void {
   root.querySelectorAll(MARKER_SELECTOR).forEach((el) => {
-    knownMarkers.add(el);
     render(el);
   });
-}
-
-function renderAllKnown(): void {
-  for (const el of knownMarkers) {
-    render(el);
-  }
 }
 
 function observeAdditions(): void {
@@ -81,7 +87,6 @@ function observeAdditions(): void {
           return;
         }
         if (node.matches(MARKER_SELECTOR)) {
-          knownMarkers.add(node);
           render(node);
         }
         scan(node);
@@ -100,8 +105,11 @@ async function start(): Promise<void> {
       return;
     }
     people = mapFromChange(changes[STORAGE_KEY_FOR_TESTS]);
-    renderAllKnown();
-    scan(document); // a marker that did not match before may match now
+    // Re-scans every marker in the page now, rather than keeping a separate
+    // list of markers seen so far: this runs only on a storage edit (the
+    // admin changes the list in the popup), never per DOM mutation, so the
+    // cost of one querySelectorAll over the page is not a hot path.
+    scan(document);
   });
 }
 
