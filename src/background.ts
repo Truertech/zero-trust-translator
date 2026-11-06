@@ -14,6 +14,8 @@ import { applyCsv, mergePeople, previewCsv, type ImportResult } from './import';
 import {
   AUTO_LOCK_CHOICES,
   CEREMONY_PORT,
+  CHECK_WINDOW_MS,
+  PASSWORD_LOCKOUT_MS,
   REFRESH_MESSAGE,
   type AutoLockMinutes,
   type CeremonyOp,
@@ -62,10 +64,8 @@ export const LOCK_REASON_KEY = 'zt-lock-reason-v1';
 /** When the PC locked, if "Lock when this PC locks" is off. Cleared by a lock. */
 export const PC_LOCKED_AT_KEY = 'zt-pc-locked-at-v1';
 
-/** A guarded action needs a check no older than this. */
-export const CHECK_WINDOW_MS = 300_000;
+export { CHECK_WINDOW_MS, PASSWORD_LOCKOUT_MS };
 export const MAX_PASSWORD_FAILURES = 5;
-export const PASSWORD_LOCKOUT_MS = 300_000;
 
 const CEREMONY_OPS: readonly CeremonyOp[] = ['unlock', 'check', 'setup', 'add'];
 
