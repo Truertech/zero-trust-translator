@@ -538,7 +538,7 @@ function showPrivacy(): void {
       h(
         'div',
         { class: 'hero' },
-        svg('shieldLock', 20, 1.8),
+        svg('shieldLock', 23, 1.8),
         h('div', {}, h('div', { class: 'h' }, 'No data ever leaves this computer'), h('div', { class: 'p' }, 'Names stay on this PC. Not on our servers, not in your Google account.')),
       ),
       h(
