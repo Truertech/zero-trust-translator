@@ -208,6 +208,7 @@ async function showRecovery(): Promise<void> {
               class: 'btn',
               type: 'button',
               style: 'flex:1',
+              testid: 'zt-recovery-copy',
               onclick: () => {
                 void navigator.clipboard.writeText(groups.join(' ')).then(
                   () => (copied.textContent = 'Copied'),
@@ -218,7 +219,7 @@ async function showRecovery(): Promise<void> {
             svg('copy'),
             'Copy',
           ),
-          h('button', { class: 'btn', type: 'button', style: 'flex:1', onclick: () => window.print() }, svg('print'), 'Print'),
+          h('button', { class: 'btn', type: 'button', style: 'flex:1', testid: 'zt-recovery-print', onclick: () => window.print() }, svg('print'), 'Print'),
         ),
         copied,
         h(
@@ -349,7 +350,7 @@ function showSecret(screen: SecretScreen): void {
     h('label', { for: 'pw' }, isPassword ? 'Enter your password' : 'Enter your recovery code'),
     box,
     error,
-    h('div', { class: 'go' }, submit, screen.alt && h('button', { class: 'btn big', type: 'button', onclick: screen.alt.run }, screen.alt.label)),
+    h('div', { class: 'go' }, submit, screen.alt && h('button', { class: 'btn big', type: 'button', testid: 'zt-secret-alt', onclick: screen.alt.run }, screen.alt.label)),
   );
   form.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -629,7 +630,7 @@ function showEdit(person: PersonRecord): void {
           'div',
           { class: 'note' },
           svg('info', 18),
-          h('span', {}, 'To change other details, update them in NationBuilder, then ', h('button', { class: 'link', type: 'button', onclick: () => showImportChoose() }, 'import the export again'), '.'),
+          h('span', {}, 'To change other details, update them in NationBuilder, then ', h('button', { class: 'link', type: 'button', testid: 'zt-edit-reimport', onclick: () => showImportChoose() }, 'import the export again'), '.'),
         ),
         deleteBtn,
       ),
@@ -828,7 +829,7 @@ function showNbConfirm(fileName: string, text: string, preview: Extract<CsvPrevi
     );
   const list = h('div', { style: 'flex:1;overflow:auto;padding:4px 16px 12px', testid: 'zt-import-changes' }, ...changed.slice(0, SHOWN_CHANGES).map(changeBlock));
   if (changed.length > SHOWN_CHANGES) {
-    const more = h('button', { class: 'link more', type: 'button', style: 'text-decoration:none' }, `and ${changed.length - SHOWN_CHANGES} more`);
+    const more = h('button', { class: 'link more', type: 'button', style: 'text-decoration:none', testid: 'zt-import-changes-more' }, `and ${changed.length - SHOWN_CHANGES} more`);
     more.addEventListener('click', () => {
       more.remove();
       list.append(...changed.slice(SHOWN_CHANGES).map(changeBlock));
