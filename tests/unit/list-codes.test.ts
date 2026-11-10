@@ -274,3 +274,107 @@ describe('zt:encryptForSend', () => {
     });
   });
 });
+
+describe('codes follow the answers on #3919', () => {
+  let w: World;
+
+  beforeEach(async () => {
+    w = world();
+    await setUp(w);
+  }, SLOW);
+
+  async function listed(): Promise<CodeView[]> {
+    return codesOf(await w.send<ListCodesResult>({ type: 'zt:listCodes' }));
+  }
+
+  it('uses a `ref-` username as the code, and lists that person with an empty username', async () => {
+    expectOk(await w.send({ type: 'applyImport', text: 'reference,name,phone\nref-k3m9q2xa,Pat Reed,07700 900789', fields: [] }));
+    const codes = await listed();
+    expect(codes).toContainEqual({ code: 'ref-k3m9q2xa', username: '', hasValidMobile: true });
+    expect(codes.filter((c) => c.code === 'ref-k3m9q2xa')).toHaveLength(1);
+  });
+
+  it('gives a deleted person who is added again with the same email the same code', async () => {
+    const before = byUsername(await listed(), 'Macc3').code;
+    expectOk(await w.send({ type: 'deletePerson', username: 'Macc3' }));
+    expectOk(await w.send({ type: 'addPerson', username: 'Macc3-again', email: 'SAM@example.org' }));
+    expect(byUsername(await listed(), 'Macc3-again').code).toBe(before);
+  });
+
+  it('keeps the history after Chrome restarts', async () => {
+    const before = byUsername(await listed(), 'Macc3').code;
+    expectOk(await w.send({ type: 'deletePerson', username: 'Macc3' }));
+    const restarted = createBackground(FakeChrome.from(w.chrome.snapshot()).api, () => w.clock.t);
+    expectOk(await restarted.handle({ type: 'unlock', secret: { type: 'password', password: 'violet harbour lantern 47' } } as Request, PAGE_SENDER));
+    expectOk(await restarted.handle({ type: 'addPerson', username: 'Macc3-again', email: 'sam@example.org' } as Request, PAGE_SENDER));
+    const after = codesOf((await restarted.handle({ type: 'zt:listCodes' }, PAGE_SENDER)) as ListCodesResult);
+    expect(byUsername(after, 'Macc3-again').code).toBe(before);
+  });
+
+  it('cleans up two people with the same code on the next SMS operation: the first keeps it, the second gets a new one', async () => {
+    const jane = byUsername(await listed(), 'Macc1').code;
+    // Same email as Macc1, so the history gives the new person Macc1's code.
+    expectOk(await w.send({ type: 'addPerson', username: 'Macc9', email: 'jane@example.org' }));
+    const codes = await listed();
+    expect(byUsername(codes, 'Macc1').code).toBe(jane);
+    expect(byUsername(codes, 'Macc9').code).toMatch(/^ref-[a-z0-9]{8}$/);
+    expect(byUsername(codes, 'Macc9').code).not.toBe(jane);
+    expect(new Set(codes.map((c) => c.code)).size).toBe(codes.length);
+    // The clean-up is stored: the next call gives the same codes.
+    expect((await listed()).map((c) => c.code).sort()).toEqual(codes.map((c) => c.code).sort());
+  });
+
+  it('shows the name over a page marker that holds the code', async () => {
+    const jane = byUsername(await listed(), 'Macc1').code;
+    const response = await w.send<{ ok: true; names: Record<string, string> }>({ type: 'lookupNames', ids: [jane.toUpperCase(), 'macc2'] }, CONTENT_SENDER);
+    expect(response.names).toEqual({ [jane]: 'Jane Example', macc2: 'Bob Stone' });
+  });
+});
+
+describe('zt:encryptForSend follows the answers on #3919', () => {
+  let w: World;
+
+  beforeEach(async () => {
+    w = world();
+    await setUp(w);
+  }, SLOW);
+
+  function sendFor(codes: string[]): Promise<EncryptForSendResult> {
+    return w.send<EncryptForSendResult>({ type: 'zt:encryptForSend', operation: 'sms', codes, template: 'Hi [[FirstName]]', peopleCount: codes.length, origin: PAGE_ORIGIN });
+  }
+
+  async function requestIdOf(index: number): Promise<string> {
+    await vi.waitFor(() => expect(w.chrome.windowsCreated.length).toBeGreaterThan(index));
+    return new URL(w.chrome.windowsCreated[index]!.url).searchParams.get('requestId')!;
+  }
+
+  it('leaves a code with no valid UK mobile out of the count, the same as out of the batch', async () => {
+    const codes = codesOf(await w.send<ListCodesResult>({ type: 'zt:listCodes' }));
+    const pending = sendFor([byUsername(codes, 'Macc1').code, byUsername(codes, 'Macc3').code]);
+    const requestId = await requestIdOf(0);
+    const { request } = expectOk(await w.send({ type: 'zt:getAllowRequest', requestId }, ALLOW_SENDER)) as { request: AllowRequestView };
+    expect(request.peopleCount).toBe(1);
+    expectOk(await w.send({ type: 'zt:resolveAllow', requestId, decision: 'allow' }, ALLOW_SENDER));
+    const result = await pending;
+    if (!('batch' in result)) {
+      throw new Error(`expected a batch, got ${JSON.stringify(result)}`);
+    }
+    expect((await decryptBatch(result.batch)).rows.map((r) => r.firstName)).toEqual(['Jane']);
+  });
+
+  it('refuses a second request with `busy` while an Allow window is open, and opens no second window', async () => {
+    const codes = codesOf(await w.send<ListCodesResult>({ type: 'zt:listCodes' }));
+    const first = sendFor([byUsername(codes, 'Macc1').code]);
+    const requestId = await requestIdOf(0);
+    expect(await sendFor([byUsername(codes, 'Macc2').code])).toEqual({ refused: 'busy' });
+    expect(w.chrome.windowsCreated).toHaveLength(1);
+
+    // The first window still works, and once it is answered a new request opens a window.
+    expectOk(await w.send({ type: 'zt:resolveAllow', requestId, decision: 'deny' }, ALLOW_SENDER));
+    expect(await first).toEqual({ refused: 'denied' });
+    const third = sendFor([byUsername(codes, 'Macc2').code]);
+    const thirdId = await requestIdOf(1);
+    expectOk(await w.send({ type: 'zt:resolveAllow', requestId: thirdId, decision: 'deny' }, ALLOW_SENDER));
+    expect(await third).toEqual({ refused: 'denied' });
+  });
+});

@@ -87,6 +87,8 @@ export interface Vault {
   version: 1;
   createdAt: string;
   data: Sealed;
+  /** The email-to-code history (#3919, `code.ts`), sealed under the data key. Absent until the first code is minted. */
+  codeHistory?: Sealed;
   methods: UnlockMethod[];
 }
 
@@ -195,6 +197,20 @@ export async function sealList(rawDataKey: Bytes, people: PersonRecord[]): Promi
 export async function openList(rawDataKey: Bytes, sealed: Sealed): Promise<PersonRecord[]> {
   const plain = await open(await importAesKey(rawDataKey), sealed.iv, sealed.ct);
   return JSON.parse(new TextDecoder().decode(plain)) as PersonRecord[];
+}
+
+/** Encrypts the email-to-code history under the data key, with a new IV. */
+export async function sealCodeHistory(rawDataKey: Bytes, history: Record<string, string>): Promise<Sealed> {
+  return seal(await importAesKey(rawDataKey), utf8(JSON.stringify(history)));
+}
+
+/** Opens the email-to-code history. A vault with none gives an empty history. */
+export async function openCodeHistory(rawDataKey: Bytes, sealed: Sealed | undefined): Promise<Record<string, string>> {
+  if (!sealed) {
+    return {};
+  }
+  const plain = await open(await importAesKey(rawDataKey), sealed.iv, sealed.ct);
+  return JSON.parse(new TextDecoder().decode(plain)) as Record<string, string>;
 }
 
 async function wrapDataKey(kek: CryptoKey, rawDataKey: Bytes): Promise<WrappedKey> {

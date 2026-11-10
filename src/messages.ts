@@ -183,7 +183,7 @@ export interface SendBatch {
  * decision, a locked list and an origin with no pinned key all refuse
  * before anything is encrypted.
  */
-export type EncryptForSendResult = { batch: SendBatch } | { refused: 'denied' | 'locked' | 'unknown-origin' };
+export type EncryptForSendResult = { batch: SendBatch } | { refused: 'denied' | 'locked' | 'unknown-origin' | 'busy' };
 
 /** What the Allow window (board 6/11) shows, read by `zt:getAllowRequest`. */
 export interface AllowRequestView {

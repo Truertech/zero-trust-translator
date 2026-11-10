@@ -10,7 +10,7 @@
  * the next event, so no state lives in a variable here: every request reads
  * storage again.
  */
-import { ensureCoded } from './code';
+import { ensureCoded, isRefCode, resolveCodeConflicts, type CodeHistory } from './code';
 import { applyCsv, mergePeople, previewCsv, type ImportResult } from './import';
 import {
   AUTO_LOCK_CHOICES,
@@ -52,9 +52,11 @@ import {
   makeRecoveryCode,
   makeRecoveryMethod,
   openBackup,
+  openCodeHistory,
   openList,
   openWithSecret,
   parseBackup,
+  sealCodeHistory,
   sealList,
   toBase64,
   type Bytes,
@@ -269,12 +271,44 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
    * same list never mints a second code for the same person.
    */
   async function people(rawDataKey: Bytes, current: Vault): Promise<PersonRecord[]> {
+    return codedPeople(rawDataKey, current, ensureCoded);
+  }
+
+  /**
+   * The list for an SMS operation: `people()`, then the code clean-up
+   * (`resolveCodeConflicts`, #3919), persisted when it changes a code.
+   */
+  async function smsPeople(rawDataKey: Bytes, current: Vault): Promise<PersonRecord[]> {
+    return codedPeople(rawDataKey, current, (list, history) => {
+      const coded = ensureCoded(list, history);
+      return resolveCodeConflicts(coded.people, coded.history);
+    });
+  }
+
+  /**
+   * Opens the list and the email-to-code history, runs `step` on them, and
+   * seals both again when `step` changed a code or the history. The history
+   * keeps an email's code after the person is deleted, so the same person
+   * added again gets the same code.
+   */
+  async function codedPeople(
+    rawDataKey: Bytes,
+    current: Vault,
+    step: (list: PersonRecord[], history: CodeHistory) => { people: PersonRecord[]; history: CodeHistory },
+  ): Promise<PersonRecord[]> {
     const list = await openList(rawDataKey, current.data);
-    const coded = ensureCoded(list);
-    if (coded.some((p, i) => p.code !== list[i]?.code)) {
-      await writeVault({ ...current, data: await sealList(rawDataKey, coded) });
+    const history = await openCodeHistory(rawDataKey, current.codeHistory);
+    const next = step(list, history);
+    const codesChanged = next.people.some((p, i) => p.code !== list[i]?.code);
+    const historyChanged = JSON.stringify(next.history) !== JSON.stringify(history);
+    if (codesChanged || historyChanged) {
+      await writeVault({
+        ...current,
+        data: codesChanged ? await sealList(rawDataKey, next.people) : current.data,
+        codeHistory: await sealCodeHistory(rawDataKey, next.history),
+      });
     }
-    return coded;
+    return next.people;
   }
 
   async function writeVault(next: Vault): Promise<void> {
@@ -282,7 +316,9 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
   }
 
   async function writePeople(rawDataKey: Bytes, current: Vault, list: PersonRecord[]): Promise<void> {
-    await writeVault({ ...current, data: await sealList(rawDataKey, list) });
+    // `people()` may have sealed a new code history since `current` was read.
+    const latest = (await vault()) ?? current;
+    await writeVault({ ...latest, data: await sealList(rawDataKey, list) });
     await broadcast();
   }
 
@@ -685,10 +721,17 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
     }
     const wanted = new Set((Array.isArray(ids) ? ids : []).filter((id): id is string => typeof id === 'string').map(usernameKey));
     const names: Record<string, string> = {};
+    // A marker matches a person by the username, or by the code (#3919): a
+    // person with no username on the platform appears in the page
+    // under the code the Translator minted for them.
     for (const person of await people(fromBase64(open.dataKey), current)) {
-      const key = usernameKey(person.username);
-      if (wanted.has(key) && person.name !== '') {
-        names[key] = person.name;
+      if (person.name === '') {
+        continue;
+      }
+      for (const key of [usernameKey(person.username), person.code]) {
+        if (key !== '' && wanted.has(key)) {
+          names[key] = person.name;
+        }
       }
     }
     return { phase: 'unlocked', names };
@@ -713,8 +756,16 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
       await openUnlockEntry();
       return { refused: 'locked' };
     }
-    const list = await people(fromBase64(open.dataKey), current);
-    return { codes: list.map((p) => ({ code: p.code, username: p.username, hasValidMobile: normaliseUkMobile(p.phone) !== null })) };
+    const list = await smsPeople(fromBase64(open.dataKey), current);
+    // A `ref-` username is a wipe reference, not a platform username (#3919):
+    // it is the code, and the username is reported empty.
+    return {
+      codes: list.map((p) => ({
+        code: p.code,
+        username: isRefCode(usernameKey(p.username)) ? '' : p.username,
+        hasValidMobile: normaliseUkMobile(p.phone) !== null,
+      })),
+    };
   }
 
   interface PendingAllow {
@@ -761,6 +812,11 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
       await openUnlockEntry();
       return { refused: 'locked' };
     }
+    // One Allow window at a time (#3919): a second request while
+    // one is open is refused, and the open window stays as it is.
+    if (pendingAllow.size > 0) {
+      return { refused: 'busy' };
+    }
     if (!validSendOperation(request.operation)) {
       throw new RequestError('invalid');
     }
@@ -773,11 +829,16 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
     if (!walledKey) {
       return { refused: 'unknown-origin' };
     }
-    // The window shows how many of `codes` the list actually holds, never
-    // the page's own claim: a page cannot inflate the count the admin sees.
-    const list = await people(fromBase64(open.dataKey), current);
+    // The window shows how many of `codes` the batch will hold, never the
+    // page's own claim: a page cannot inflate the count the admin sees. A
+    // code the list does not hold and a code with no valid UK mobile are
+    // both left out (#3919), the same as `encryptForSendOutcome`.
+    const list = await smsPeople(fromBase64(open.dataKey), current);
     const byCode = new Map(list.map((p) => [p.code, p]));
-    const matchedCount = codes.filter((code) => byCode.has(code)).length;
+    const matchedCount = codes.filter((code) => {
+      const person = byCode.get(code);
+      return person !== undefined && normaliseUkMobile(person.phone) !== null;
+    }).length;
     const view: AllowRequestView = {
       operation: request.operation,
       template: typeof request.template === 'string' ? request.template : '',

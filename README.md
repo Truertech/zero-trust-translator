@@ -46,11 +46,23 @@ never calls a server itself.
 
 - `zt:listCodes` answers with one row per person on the list: a `ref-`
   code, the username, and whether the phone is a valid UK mobile. Never a
-  name, a number, an email or an address. A person with no code yet gets
-  one minted the first time this message reads the list; the same code
-  answers every later call. A locked list refuses with `{ refused: 'locked' }`
-  instead of an empty list, so the page cannot read "locked" as "nobody has
-  a phone number".
+  name, a number, an email or an address. A locked list refuses with
+  `{ refused: 'locked' }` instead of an empty list, so the page cannot read
+  "locked" as "nobody has a phone number".
+- A person with no code gets one the first time the list is read, in this
+  order: a `ref-` username (a wipe reference) is the code, and
+  `zt:listCodes` gives that person an empty username; else the code the
+  email last had; else a new code. The vault keeps each email's code after
+  the person is deleted, so the same person added again gets the same code.
+- Before each `zt:listCodes` and `zt:encryptForSend`, the Translator cleans
+  up the codes, with the username as the source of truth. A `ref-` username
+  replaces a different code. When two people hold the same code, the person
+  whose username is that code keeps it, else the first person in the list
+  keeps it, and each other person gets a new code. The clean-up changes
+  codes only, never a phone number, so an opt-out (held by number in the
+  walled store) still applies to the person.
+- A page marker (`data-zt-id`) shows the name when it holds the person's
+  username or the person's code.
 - `zt:encryptForSend` takes the operation (`sms` or `eventInvite`), the
   codes to send to, a message template and the page's own count of people.
   It never encrypts anything before the admin presses Allow in a window
@@ -63,9 +75,11 @@ never calls a server itself.
   below). It answers with the wrapped key, the IV and the ciphertext only —
   nothing in clear reaches the page. Deny, closing the window with no
   decision, a locked list, and an origin with no pinned key all refuse
-  before anything is encrypted.
-- A code the page sends that the admin's list does not hold is left out of
-  the batch; the admin sees the actual matched count, not the page's count.
+  before anything is encrypted. A second `zt:encryptForSend` while an Allow
+  window is open gets `{ refused: 'busy' }`, and the open window stays.
+- A code the page sends that the admin's list does not hold, and a code
+  with no valid UK mobile, are left out of the batch and out of the count;
+  the admin sees the actual matched count, not the page's count.
 
 ### Pinned keys
 
