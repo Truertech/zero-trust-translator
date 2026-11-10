@@ -200,4 +200,4 @@ a:hover { color: #0B4F49; }
 .allow-op { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1.5px solid #0F766E; border-radius: 10px; background: #E6F4F1; color: #0B5A54; font-size: 15px; font-weight: 600; }
 .allow-count { display: flex; justify-content: space-between; font-size: 14px; }
 .allow-template { padding: 12px; border: 1px solid #9FC9C2; border-radius: 12px; background: #F4FAF8; font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
-.allow .actions .btn { flex: 1; }
+.allow .actions .btn { flex: 1; height: 46px; }
