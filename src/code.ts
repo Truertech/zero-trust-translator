@@ -6,7 +6,7 @@
  * (`zero-trust-people.ts`), so the admin app's `PersonName.tsx` draws a code
  * with the same shield it draws a `ref-` reference with.
  */
-import { emailKey, usernameKey, type PersonRecord } from './types';
+import { emailKey, usernameKey, withSplitName, type PersonRecord } from './types';
 import { randomBytes } from './vault';
 
 const CODE_ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789';
@@ -58,7 +58,7 @@ function remember(people: PersonRecord[], history: CodeHistory): CodeHistory {
 
 /** Gives a code to every person with none yet. A person with a code keeps it. */
 export function ensureCoded(people: PersonRecord[], history: CodeHistory = {}): { people: PersonRecord[]; history: CodeHistory } {
-  const coded = people.map((p) => (p.code ? p : { ...p, code: firstCode(p, history) }));
+  const coded = people.map(withSplitName).map((p) => (p.code ? p : { ...p, code: firstCode(p, history) }));
   return { people: coded, history: remember(coded, history) };
 }
 

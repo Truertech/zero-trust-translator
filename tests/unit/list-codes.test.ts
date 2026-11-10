@@ -5,7 +5,9 @@
  * it, with a fake `chrome.windows` standing in for the real one.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createBackground, type Background, type MessageSender } from '../../src/background';
+import { createBackground, UNLOCKED_KEY, VAULT_KEY, type Background, type MessageSender } from '../../src/background';
+import type { PersonRecord } from '../../src/types';
+import { fromBase64, openList, sealList } from '../../src/vault';
 import type { AllowRequestView, CodeView, EncryptForSendResult, ListCodesResult, Request, SendBatch } from '../../src/messages';
 import { CONTENT_SENDER, EXTENSION_ID, EXTENSION_ORIGIN, FakeChrome, PAGE_SENDER } from './fake-chrome';
 
@@ -360,6 +362,27 @@ describe('zt:encryptForSend follows the answers on #3919', () => {
       throw new Error(`expected a batch, got ${JSON.stringify(result)}`);
     }
     expect((await decryptBatch(result.batch)).rows.map((r) => r.firstName)).toEqual(['Jane']);
+  });
+
+  it('sends the first name of a person saved before the name split, and saves the split', async () => {
+    // A list sealed before #3919: no `firstName`, no `lastName`, no `code`.
+    const local = w.chrome.local.data as Record<string, any>;
+    const rawDataKey = fromBase64((w.chrome.session.data as Record<string, any>)[UNLOCKED_KEY].dataKey);
+    const saved = await openList(rawDataKey, local[VAULT_KEY].data);
+    const old = saved.map(({ firstName, lastName, code, ...rest }) => (void firstName, void lastName, void code, rest)) as PersonRecord[];
+    local[VAULT_KEY] = { ...local[VAULT_KEY], data: await sealList(rawDataKey, old) };
+
+    const codes = codesOf(await w.send<ListCodesResult>({ type: 'zt:listCodes' }));
+    const pending = sendFor([byUsername(codes, 'Macc1').code, byUsername(codes, 'Macc2').code]);
+    const requestId = await requestIdOf(0);
+    expectOk(await w.send({ type: 'zt:resolveAllow', requestId, decision: 'allow' }, ALLOW_SENDER));
+    const result = await pending;
+    if (!('batch' in result)) {
+      throw new Error(`expected a batch, got ${JSON.stringify(result)}`);
+    }
+    expect((await decryptBatch(result.batch)).rows.map((r) => r.firstName).sort()).toEqual(['Bob', 'Jane']);
+    const after = await openList(rawDataKey, (w.chrome.local.data as Record<string, any>)[VAULT_KEY].data);
+    expect(after.find((p) => p.username === 'Macc1')).toMatchObject({ firstName: 'Jane', lastName: 'Example' });
   });
 
   it('refuses a second request with `busy` while an Allow window is open, and opens no second window', async () => {

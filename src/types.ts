@@ -51,6 +51,16 @@ export function splitName(name: string): { firstName: string; lastName: string }
   return { firstName: trimmed.slice(0, space), lastName: trimmed.slice(space + 1).trim() };
 }
 
+/**
+ * Gives a person with no first and no last name the split of `name`. A
+ * record saved before #3919 has neither key, and a send batch needs the
+ * first name. A person that has either name keeps both as they are.
+ */
+export function withSplitName(person: PersonRecord): PersonRecord {
+  if (person.firstName || person.lastName) return person;
+  return { ...person, ...splitName(person.name ?? '') };
+}
+
 /** One row the CSV reader skipped, and why. 1-based, counting the header as row 1. */
 export interface SkippedRow {
   row: number;

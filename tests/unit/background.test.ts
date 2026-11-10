@@ -319,8 +319,9 @@ describe('setup', () => {
         kind: '',
         // `people()` mints a code for every code-less record on this read (#3919).
         code: expect.stringMatching(/^ref-[a-z0-9]{8}$/),
-        firstName: '',
-        lastName: '',
+        // The v0.1.0 name is split for the send batch (#3919).
+        firstName: 'Jane',
+        lastName: 'Example',
       },
     ]);
     expect(w.chrome.idleIntervals).toEqual([DEFAULT_SETTINGS.autoLockMinutes * 60]);

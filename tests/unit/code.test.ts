@@ -37,6 +37,19 @@ describe('newCode and isRefCode', () => {
 });
 
 describe('ensureCoded', () => {
+  it('splits `name` for a person saved with no first and no last name', () => {
+    const saved = { ...person('Macc1', { name: 'Jane Ann Example', code: 'ref-kept1234' }) } as Partial<PersonRecord>;
+    delete saved.firstName;
+    delete saved.lastName;
+    const { people } = ensureCoded([saved as PersonRecord]);
+    expect(people[0]).toMatchObject({ firstName: 'Jane', lastName: 'Ann Example' });
+  });
+
+  it('keeps the first and last name a person already has', () => {
+    const { people } = ensureCoded([person('Macc1', { name: 'Jane Example', firstName: 'J', code: 'ref-kept1234' })]);
+    expect(people[0]).toMatchObject({ firstName: 'J', lastName: '' });
+  });
+
   it('keeps a code a person already has', () => {
     const { people } = ensureCoded([person('Macc1', { code: 'ref-kept1234' })]);
     expect(people[0]!.code).toBe('ref-kept1234');

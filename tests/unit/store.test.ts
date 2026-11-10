@@ -140,7 +140,7 @@ describe('removePerson', () => {
 
 describe('peopleFromLegacy', () => {
   it('reads the v0.1.0 map from id to name, and drops a value that is not a string', () => {
-    expect(peopleFromLegacy({ macc1: 'Jane Example', macc2: 7, macc3: null })).toEqual([person('macc1', 'Jane Example')]);
+    expect(peopleFromLegacy({ macc1: 'Jane Example', macc2: 7, macc3: null })).toEqual([{ ...person('macc1', 'Jane Example'), firstName: 'Jane', lastName: 'Example' }]);
   });
 
   it.each([

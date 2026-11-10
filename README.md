@@ -69,7 +69,10 @@ never calls a server itself.
   this extension opens, which shows the real operation, the matched count
   — read from the admin's own list, never the page's claim — and the
   template. On Allow it builds a batch of a fresh one-time token, the time,
-  and each matched code's phone number (E.164) and first name; encrypts the
+  and each matched code's phone number (E.164) and first name (a person
+  saved with no first and no last name, such as a list from before this
+  feature, gets `name` split on the first space when the list is read);
+  encrypts the
   batch with a new AES-256-GCM key; and wraps that key with RSA-OAEP-SHA-256
   under the pinned public key for the page's origin (see "Pinned keys"
   below). It answers with the wrapped key, the IV and the ciphertext only —

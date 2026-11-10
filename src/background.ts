@@ -265,7 +265,8 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
 
   /**
    * Reads the list, giving a code (#3919) to any person who has none yet —
-   * every person made before this feature existed. `ensureCoded` is the one
+   * every person made before this feature existed — and a first and last
+   * name split from `name` to any person who has neither. `ensureCoded` is the one
    * path a fresh person and a legacy person both go through: the first read
    * after an upgrade persists the codes it minted, so a later read of the
    * same list never mints a second code for the same person.
@@ -299,7 +300,7 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
     const list = await openList(rawDataKey, current.data);
     const history = await openCodeHistory(rawDataKey, current.codeHistory);
     const next = step(list, history);
-    const codesChanged = next.people.some((p, i) => p.code !== list[i]?.code);
+    const codesChanged = next.people.some((p, i) => p.code !== list[i]?.code || p.firstName !== list[i]?.firstName || p.lastName !== list[i]?.lastName);
     const historyChanged = JSON.stringify(next.history) !== JSON.stringify(history);
     if (codesChanged || historyChanged) {
       await writeVault({
