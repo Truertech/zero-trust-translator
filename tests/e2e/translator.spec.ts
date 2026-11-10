@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 import type { BrowserContext, Page, Worker } from '@playwright/test';
 import { readBadge, readRenderedName } from './helpers/cdp-shadow';
 import { expect, launch, test } from './fixtures/extension';
+import { WALLED_DEV_KEY_PATH } from './global-setup';
+import type { EncryptForSendResult, ListCodesResult, Request, SendBatch } from '../../src/messages';
 
 const PEOPLE_CSV = join(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'people.csv');
 const PASSWORD = 'violet harbour lantern 47';
@@ -224,5 +226,217 @@ test.describe('storage and network', () => {
 
     await expect(options.getByTestId('zt-version')).toHaveText(/^Zero Trust Translator · v\d+\.\d+\.\d+$/);
     await expect(options.getByTestId('zt-remove-method')).toBeDisabled();
+  });
+});
+
+// ---- send batch for the walled Lambda (#3919) --------------------------------------
+
+interface WalledDevKey {
+  origin: string;
+  keyId: string;
+  publicKeySpki: string;
+  privateKeyPkcs8: string;
+}
+
+let walledPrivateKey: CryptoKey;
+
+test.beforeAll(async () => {
+  const walledDevKey = JSON.parse(readFileSync(WALLED_DEV_KEY_PATH, 'utf8')) as WalledDevKey;
+  walledPrivateKey = await crypto.subtle.importKey(
+    'pkcs8',
+    Buffer.from(walledDevKey.privateKeyPkcs8, 'base64'),
+    { name: 'RSA-OAEP', hash: 'SHA-256' },
+    false,
+    ['decrypt'],
+  );
+});
+
+/**
+ * Posts one `zt:listCodes`/`zt:encryptForSend` request the way a real app
+ * page does: `window.postMessage`, relayed by `content.ts`. A page cannot
+ * call `chrome.runtime.sendMessage` itself, only an extension's own script
+ * can, which is the whole point of the relay.
+ */
+function postToTranslator<T>(page: Page, request: Request): Promise<T> {
+  return page.evaluate((req) => {
+    return new Promise((resolve) => {
+      const requestId = crypto.randomUUID();
+      function onMessage(event: MessageEvent): void {
+        const data = event.data as { source?: string; requestId?: string; response?: unknown } | null;
+        if (event.source !== window || event.origin !== location.origin || data?.source !== 'zero-trust-translator-extension' || data.requestId !== requestId) {
+          return;
+        }
+        window.removeEventListener('message', onMessage);
+        resolve(data.response);
+      }
+      window.addEventListener('message', onMessage);
+      window.postMessage({ source: 'zero-trust-translator-page', requestId, request: req }, location.origin);
+    });
+  }, request) as Promise<T>;
+}
+
+/** The code `zt:listCodes` minted for each of the given usernames. */
+async function codesFor(page: Page, usernames: string[]): Promise<Record<string, string>> {
+  const result = await postToTranslator<ListCodesResult>(page, { type: 'zt:listCodes' });
+  if (!('codes' in result)) {
+    throw new Error(`zt:listCodes refused: ${result.refused}`);
+  }
+  const byUsername = new Map(result.codes.map((c) => [c.username, c.code]));
+  const codes: Record<string, string> = {};
+  for (const username of usernames) {
+    const code = byUsername.get(username);
+    if (!code) {
+      throw new Error(`no code for ${username}`);
+    }
+    codes[username] = code;
+  }
+  return codes;
+}
+
+function b64ToBytes(value: string): Uint8Array {
+  return Uint8Array.from(Buffer.from(value, 'base64'));
+}
+
+/** Opens the batch with the dev walled private key, the same way the walled Lambda (#3920) would. */
+async function decryptBatch(batch: SendBatch): Promise<{ token: string; timestamp: string; rows: { code: string; phone: string; firstName: string }[] }> {
+  const rawAesKey = await crypto.subtle.decrypt({ name: 'RSA-OAEP' }, walledPrivateKey, b64ToBytes(batch.wrappedKey));
+  const aesKey = await crypto.subtle.importKey('raw', rawAesKey, { name: 'AES-GCM' }, false, ['decrypt']);
+  const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64ToBytes(batch.iv) }, aesKey, b64ToBytes(batch.ciphertext));
+  return JSON.parse(new TextDecoder().decode(plaintext));
+}
+
+test.describe('send batch (#3919)', () => {
+  test('Allow shows the SMS wording, the matched count and the template, and encrypts a decryptable batch', async ({ context, extensionId }) => {
+    const popup = await setUpWithPeople(context, extensionId);
+    const page = await context.newPage();
+    await page.goto('/page.html');
+    const codes = await codesFor(page, ['Macc1', 'Macc2']);
+
+    // The page claims an origin that is not its own: `content.ts` always
+    // writes `location.origin` over whatever the page sent, so this must
+    // not change the outcome.
+    const pending = postToTranslator<EncryptForSendResult>(page, {
+      type: 'zt:encryptForSend',
+      operation: 'sms',
+      codes: [codes['Macc1']!, codes['Macc2']!],
+      template: 'Hi [[FirstName]]',
+      peopleCount: 2,
+      origin: 'https://not-this-page.example',
+    });
+
+    const allowPage = await context.waitForEvent('page');
+    await expect(allowPage.getByTestId('zt-allow-operation')).toHaveText('Send SMS messages');
+    await expect(allowPage.getByTestId('zt-allow-count')).toHaveText('2');
+    await expect(allowPage.getByTestId('zt-allow-template')).toHaveText('Hi [[FirstName]]');
+    await allowPage.getByTestId('zt-allow-allow').click();
+
+    const result = await pending;
+    if (!('batch' in result)) {
+      throw new Error(`refused: ${result.refused}`);
+    }
+    const plaintext = await decryptBatch(result.batch);
+    const byCode = (a: { code: string }, b: { code: string }): number => a.code.localeCompare(b.code);
+    expect(plaintext.rows.sort(byCode)).toEqual(
+      [
+        { code: codes['Macc1']!, phone: '+447700900123', firstName: 'Jane' },
+        { code: codes['Macc2']!, phone: '+447700900456', firstName: 'John' },
+      ].sort(byCode),
+    );
+    expect(plaintext.token).toMatch(/^[0-9a-f]{64}$/);
+    await popup.close();
+  });
+
+  test('Allow shows the event invite wording, and Deny refuses with no batch', async ({ context, extensionId }) => {
+    const popup = await setUpWithPeople(context, extensionId);
+    const page = await context.newPage();
+    await page.goto('/page.html');
+    const codes = await codesFor(page, ['Macc1']);
+
+    const pending = postToTranslator<EncryptForSendResult>(page, {
+      type: 'zt:encryptForSend',
+      operation: 'eventInvite',
+      codes: [codes['Macc1']!],
+      template: 'Join us on Saturday',
+      peopleCount: 1,
+      origin: 'http://localhost:4321',
+    });
+    const allowPage = await context.waitForEvent('page');
+    await expect(allowPage.getByTestId('zt-allow-operation')).toHaveText('Send SMS event invites');
+    await allowPage.getByTestId('zt-allow-deny').click();
+
+    expect(await pending).toEqual({ refused: 'denied' });
+    await popup.close();
+  });
+
+  test('a locked list refuses zt:encryptForSend before any Allow window opens', async ({ context, extensionId }) => {
+    const popup = await setUpWithPeople(context, extensionId);
+    await popup.getByTestId('zt-lock').click();
+    await expect(popup.getByTestId('zt-locked')).toBeVisible();
+    const page = await context.newPage();
+    await page.goto('/page.html');
+
+    const [result, openedPage] = await Promise.all([
+      postToTranslator<EncryptForSendResult>(page, {
+        type: 'zt:encryptForSend',
+        operation: 'sms',
+        codes: ['ref-anything'],
+        template: 'x',
+        peopleCount: 1,
+        origin: 'http://localhost:4321',
+      }),
+      context.waitForEvent('page'),
+    ]);
+
+    expect(result).toEqual({ refused: 'locked' });
+    // The locked refusal opens the extension's own unlock tab, not the
+    // Allow window (board 6/11): that tab is `popup.html`, not `allow.html`.
+    expect(openedPage.url()).toContain('popup.html');
+  });
+
+  test('an origin with no pinned key refuses with no Allow window', async ({ context, extensionId, baseURL }) => {
+    await setUpWithPeople(context, extensionId);
+    const secondOrigin = new URL(baseURL ?? '').origin.replace(/:(\d+)$/, (_match, digits: string) => `:${Number(digits) + 1}`);
+    const otherPage = await context.newPage();
+    await otherPage.goto(`${secondOrigin}/page.html`);
+
+    const pagesBefore = context.pages().length;
+    const result = await postToTranslator<EncryptForSendResult>(otherPage, {
+      type: 'zt:encryptForSend',
+      operation: 'sms',
+      codes: ['ref-anything'],
+      template: 'x',
+      peopleCount: 1,
+      origin: secondOrigin,
+    });
+
+    expect(result).toEqual({ refused: 'unknown-origin' });
+    expect(context.pages().length).toBe(pagesBefore);
+  });
+
+  test('a code the list does not hold is left out of the batch, and the window shows the matched count', async ({ context, extensionId }) => {
+    const popup = await setUpWithPeople(context, extensionId);
+    const page = await context.newPage();
+    await page.goto('/page.html');
+    const codes = await codesFor(page, ['Macc1']);
+
+    const pending = postToTranslator<EncryptForSendResult>(page, {
+      type: 'zt:encryptForSend',
+      operation: 'sms',
+      codes: [codes['Macc1']!, 'ref-not-in-list'],
+      template: 'Hi',
+      peopleCount: 2,
+      origin: 'http://localhost:4321',
+    });
+    const allowPage = await context.waitForEvent('page');
+    await expect(allowPage.getByTestId('zt-allow-count')).toHaveText('1');
+    await allowPage.getByTestId('zt-allow-allow').click();
+
+    const result = await pending;
+    if (!('batch' in result)) {
+      throw new Error(`refused: ${result.refused}`);
+    }
+    const plaintext = await decryptBatch(result.batch);
+    expect(plaintext.rows).toEqual([{ code: codes['Macc1']!, phone: '+447700900123', firstName: 'Jane' }]);
+    await popup.close();
   });
 });

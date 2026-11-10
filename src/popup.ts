@@ -571,9 +571,9 @@ function readOnlyRow(label: string, value: string): HTMLElement {
 }
 
 function showEdit(person: PersonRecord): void {
-  const username = h('input', { id: 'zid', class: 'mono', value: person.username, testid: 'zt-edit-username', autocomplete: 'off', spellcheck: 'false', autofocus: true });
+  const username = h('input', { id: 'zid', class: 'mono', value: person.username, testid: 'zt-person-username', autocomplete: 'off', spellcheck: 'false', autofocus: true });
   const error = h('p', { class: 'err', testid: 'zt-edit-error', role: 'alert', style: 'margin:0' });
-  const save = h('button', { class: 'btn pri', type: 'button', testid: 'zt-edit-save' }, 'Save');
+  const save = h('button', { class: 'btn pri', type: 'button', testid: 'zt-person-save' }, 'Save');
   save.addEventListener('click', () => {
     void (async () => {
       if (username.value.trim() === person.username) {
@@ -622,7 +622,8 @@ function showEdit(person: PersonRecord): void {
           {},
           readOnlyRow('Name', person.name),
           readOnlyRow('Email', person.email),
-          readOnlyRow('Phone', person.phone),
+          readOnlyRow('Mobile', person.phone),
+          readOnlyRow('ID', person.code),
           readOnlyRow('Address', person.address),
           readOnlyRow('Postcode', person.postcode),
         ),

@@ -1,4 +1,4 @@
 username,kind,email,first name,last name,phone,address,postcode
-Macc1,real,,Jane,Example,,,
-Macc2,real,,John,Doe,,,
+Macc1,real,,Jane,Example,07700 900123,,
+Macc2,real,,John,Doe,07700 900456,,
 anon-ref-1,anonymised,,,,,,,
