@@ -378,3 +378,54 @@ describe('zt:encryptForSend follows the answers on #3919', () => {
     expect(await third).toEqual({ refused: 'denied' });
   });
 });
+
+describe('zt:encryptForSend reserves the Allow slot at once (#3919)', () => {
+  let w: World;
+
+  beforeEach(async () => {
+    w = world();
+    await setUp(w);
+  }, SLOW);
+
+  function sendFor(codes: string[], origin = PAGE_ORIGIN, operation: unknown = 'sms'): Promise<EncryptForSendResult> {
+    return w.send<EncryptForSendResult>({ type: 'zt:encryptForSend', operation, codes, template: 'Hi [[FirstName]]', peopleCount: codes.length, origin });
+  }
+
+  async function denyWindow(index: number): Promise<void> {
+    await vi.waitFor(() => expect(w.chrome.windowsCreated.length).toBeGreaterThan(index));
+    const requestId = new URL(w.chrome.windowsCreated[index]!.url).searchParams.get('requestId')!;
+    expectOk(await w.send({ type: 'zt:resolveAllow', requestId, decision: 'deny' }, ALLOW_SENDER));
+  }
+
+  it('two requests sent together open one window, and the second is refused with `busy`', async () => {
+    const codes = codesOf(await w.send<ListCodesResult>({ type: 'zt:listCodes' }));
+    const jane = byUsername(codes, 'Macc1').code;
+    const first = sendFor([jane]);
+    const second = sendFor([jane]);
+    expect(await second).toEqual({ refused: 'busy' });
+    await denyWindow(0);
+    expect(await first).toEqual({ refused: 'denied' });
+    expect(w.chrome.windowsCreated).toHaveLength(1);
+  });
+
+  it('gives the slot back after an origin with no pinned key, and after a refused request', async () => {
+    const jane = byUsername(codesOf(await w.send<ListCodesResult>({ type: 'zt:listCodes' })), 'Macc1').code;
+    expect(await sendFor([jane], 'https://unknown.example.org')).toEqual({ refused: 'unknown-origin' });
+    expect(await sendFor([jane], PAGE_ORIGIN, 'fax')).toMatchObject({ ok: false, error: 'invalid' });
+    const next = sendFor([jane]);
+    await denyWindow(0);
+    expect(await next).toEqual({ refused: 'denied' });
+  });
+
+  it('gives the slot back when the window closes with no decision', async () => {
+    const jane = byUsername(codesOf(await w.send<ListCodesResult>({ type: 'zt:listCodes' })), 'Macc1').code;
+    const first = sendFor([jane]);
+    await vi.waitFor(() => expect(w.chrome.windowsCreated).toHaveLength(1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    w.bg.onWindowRemoved(1);
+    expect(await first).toEqual({ refused: 'denied' });
+    const next = sendFor([jane]);
+    await denyWindow(1);
+    expect(await next).toEqual({ refused: 'denied' });
+  });
+});

@@ -788,6 +788,19 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
    */
   const pendingAllow = new Map<string, PendingAllow>();
 
+  /**
+   * True from the moment a `zt:encryptForSend` passes the busy check until
+   * its Allow window is answered or closed, or the request ends early. The
+   * check and the reservation run in one synchronous step, so two requests
+   * that arrive together cannot both open a window (#3919).
+   */
+  let allowReserved = false;
+
+  function endAllow(requestId: string): void {
+    pendingAllow.delete(requestId);
+    allowReserved = false;
+  }
+
   function validSendOperation(value: unknown): value is SendOperation {
     return value === 'sms' || value === 'eventInvite';
   }
@@ -814,9 +827,30 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
     }
     // One Allow window at a time (#3919): a second request while
     // one is open is refused, and the open window stays as it is.
-    if (pendingAllow.size > 0) {
+    if (allowReserved) {
       return { refused: 'busy' };
     }
+    allowReserved = true;
+    let prepared: Awaited<ReturnType<typeof prepareAllow>>;
+    try {
+      prepared = await prepareAllow(request, open, current);
+    } catch (error) {
+      allowReserved = false;
+      throw error;
+    }
+    if ('refused' in prepared) {
+      allowReserved = false;
+      return prepared;
+    }
+    return awaitAllow(crypto.randomUUID(), prepared);
+  }
+
+  /** Checks the request and builds what the Allow window shows. Runs while the Allow slot is reserved. */
+  async function prepareAllow(
+    request: Extract<Request, { type: 'zt:encryptForSend' }>,
+    open: Unlocked,
+    current: Vault,
+  ): Promise<{ refused: 'unknown-origin' } | Pick<PendingAllow, 'view' | 'codes' | 'walledKey'>> {
     if (!validSendOperation(request.operation)) {
       throw new RequestError('invalid');
     }
@@ -845,7 +879,12 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
       peopleCount: matchedCount,
       origin,
     };
-    const requestId = crypto.randomUUID();
+    return { view, codes, walledKey };
+  }
+
+  /** Opens the Allow window and settles when the admin decides or closes it. `endAllow` gives the slot back. */
+  function awaitAllow(requestId: string, entry: Pick<PendingAllow, 'view' | 'codes' | 'walledKey'>): Promise<EncryptForSendResult> {
+    const { view, codes, walledKey } = entry;
     return new Promise<EncryptForSendResult>((resolve, reject) => {
       pendingAllow.set(requestId, { view, codes, walledKey, windowId: undefined, resolve, reject });
       api.windows
@@ -857,7 +896,7 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
           }
         })
         .catch((error: unknown) => {
-          pendingAllow.delete(requestId);
+          endAllow(requestId);
           reject(error);
         });
     });
@@ -904,7 +943,7 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
     if (!entry) {
       throw new RequestError('not-found');
     }
-    pendingAllow.delete(id);
+    endAllow(id);
     closeAllowWindow(entry);
     try {
       entry.resolve(await encryptForSendOutcome(entry, decision));
@@ -919,7 +958,7 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
   function onWindowRemoved(windowId: number): void {
     for (const [id, entry] of pendingAllow) {
       if (entry.windowId === windowId) {
-        pendingAllow.delete(id);
+        endAllow(id);
         entry.resolve({ refused: 'denied' });
       }
     }
