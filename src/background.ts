@@ -10,6 +10,7 @@
  * the next event, so no state lives in a variable here: every request reads
  * storage again.
  */
+import { ensureCoded } from './code';
 import { applyCsv, mergePeople, previewCsv, type ImportResult } from './import';
 import {
   AUTO_LOCK_CHOICES,
@@ -17,21 +18,29 @@ import {
   CHECK_WINDOW_MS,
   PASSWORD_LOCKOUT_MS,
   REFRESH_MESSAGE,
+  type AllowRequestView,
   type AutoLockMinutes,
   type CeremonyOp,
+  type EncryptForSendResult,
   type ErrorCode,
   type Failure,
+  type ListCodesResult,
   type LockReason,
   type MethodView,
   type PasskeyMessage,
   type Request,
   type SecretMessage,
+  type SendOperation,
+  type SendRow,
   type Settings,
   type StateView,
 } from './messages';
 import { passwordAccepted } from './password';
+import { normaliseUkMobile } from './phone-number';
+import { encryptBatch } from './send-crypto';
 import { LEGACY_STORAGE_KEY, ListError, addPerson, peopleFromLegacy, removePerson, renameUser, sortPeople } from './store';
 import { MissingIdColumnError, usernameKey, type DetailField, type PersonRecord } from './types';
+import { walledKeyFor, type WalledKey } from './walled-keys';
 import {
   BackupFormatError,
   WrongSecretError,
@@ -132,6 +141,11 @@ export interface ChromeApi {
     sendMessage(tabId: number, message: unknown): Promise<unknown>;
     create(properties: { url: string }): Promise<unknown>;
   };
+  windows: {
+    create(createData: { url: string; type: 'popup'; width: number; height: number }): Promise<{ id?: number }>;
+    remove(windowId: number): Promise<void>;
+    onRemoved: { addListener(fn: (windowId: number) => void): void };
+  };
 }
 
 interface Unlocked {
@@ -184,6 +198,7 @@ export interface Background {
   handle(request: Request, sender: MessageSender): Promise<unknown>;
   onIdleState(state: string): Promise<void>;
   onCeremonyPort(port: Port): void;
+  onWindowRemoved(windowId: number): void;
   start(): Promise<void>;
 }
 
@@ -246,8 +261,20 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
     return current;
   }
 
+  /**
+   * Reads the list, giving a code (#3919) to any person who has none yet —
+   * every person made before this feature existed. `ensureCoded` is the one
+   * path a fresh person and a legacy person both go through: the first read
+   * after an upgrade persists the codes it minted, so a later read of the
+   * same list never mints a second code for the same person.
+   */
   async function people(rawDataKey: Bytes, current: Vault): Promise<PersonRecord[]> {
-    return openList(rawDataKey, current.data);
+    const list = await openList(rawDataKey, current.data);
+    const coded = ensureCoded(list);
+    if (coded.some((p, i) => p.code !== list[i]?.code)) {
+      await writeVault({ ...current, data: await sealList(rawDataKey, coded) });
+    }
+    return coded;
   }
 
   async function writeVault(next: Vault): Promise<void> {
@@ -667,6 +694,176 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
     return { phase: 'unlocked', names };
   }
 
+  /**
+   * ADR 0214's lock applies to a page-triggered request the same as to the
+   * popup: a locked (or not yet set up) list refuses rather than opening
+   * anything sensitive. There is no popup open to show the lock screen in,
+   * so this opens the extension's own page in a tab, where it renders that
+   * screen the same way.
+   */
+  async function openUnlockEntry(): Promise<void> {
+    await api.tabs.create({ url: api.runtime.getURL('popup.html') });
+  }
+
+  /** Board 1's codes table (#3919): the code, the username and whether the phone is a valid UK mobile. No name, no phone, no address. */
+  async function listCodes(): Promise<ListCodesResult> {
+    const current = await vault();
+    const open = current ? await unlocked() : undefined;
+    if (!current || !open) {
+      await openUnlockEntry();
+      return { refused: 'locked' };
+    }
+    const list = await people(fromBase64(open.dataKey), current);
+    return { codes: list.map((p) => ({ code: p.code, username: p.username, hasValidMobile: normaliseUkMobile(p.phone) !== null })) };
+  }
+
+  interface PendingAllow {
+    view: AllowRequestView;
+    codes: string[];
+    walledKey: WalledKey;
+    windowId: number | undefined;
+    resolve: (value: EncryptForSendResult) => void;
+    reject: (error: unknown) => void;
+  }
+
+  /**
+   * One entry per open Allow window (board 6/11). In-memory only: if the
+   * service worker is evicted while a window is open, the window's own
+   * `zt:getAllowRequest`/`zt:resolveAllow` calls find no entry and fail with
+   * `not-found`, which the window shows as an error — the same outcome as
+   * the admin closing the window, so the page's own timeout recovers either
+   * way. `allow.ts` holds a port open for as long as it waits, which keeps
+   * the worker alive for the ordinary case.
+   */
+  const pendingAllow = new Map<string, PendingAllow>();
+
+  function validSendOperation(value: unknown): value is SendOperation {
+    return value === 'sms' || value === 'eventInvite';
+  }
+
+  function closeAllowWindow(entry: PendingAllow): void {
+    if (entry.windowId !== undefined) {
+      void api.windows.remove(entry.windowId).catch(() => undefined);
+    }
+  }
+
+  /**
+   * Opens the Allow window (board 6) and returns a promise that settles
+   * when the admin decides, or the window closes with no decision. This
+   * runs outside `serialize()`: the wait for the admin is not a storage
+   * change, and serializing it would stall every other request — getState,
+   * a lock, an import — for as long as the window stays open.
+   */
+  async function startEncryptForSend(request: Extract<Request, { type: 'zt:encryptForSend' }>): Promise<EncryptForSendResult> {
+    const current = await vault();
+    const open = current ? await unlocked() : undefined;
+    if (!current || !open) {
+      await openUnlockEntry();
+      return { refused: 'locked' };
+    }
+    if (!validSendOperation(request.operation)) {
+      throw new RequestError('invalid');
+    }
+    const codes = Array.isArray(request.codes) ? request.codes.filter((c): c is string => typeof c === 'string') : [];
+    if (codes.length === 0) {
+      throw new RequestError('invalid', 'No codes were given to send to.');
+    }
+    const origin = String(request.origin ?? '');
+    const walledKey = walledKeyFor(origin);
+    if (!walledKey) {
+      return { refused: 'unknown-origin' };
+    }
+    // The window shows how many of `codes` the list actually holds, never
+    // the page's own claim: a page cannot inflate the count the admin sees.
+    const list = await people(fromBase64(open.dataKey), current);
+    const byCode = new Map(list.map((p) => [p.code, p]));
+    const matchedCount = codes.filter((code) => byCode.has(code)).length;
+    const view: AllowRequestView = {
+      operation: request.operation,
+      template: typeof request.template === 'string' ? request.template : '',
+      peopleCount: matchedCount,
+      origin,
+    };
+    const requestId = crypto.randomUUID();
+    return new Promise<EncryptForSendResult>((resolve, reject) => {
+      pendingAllow.set(requestId, { view, codes, walledKey, windowId: undefined, resolve, reject });
+      api.windows
+        .create({ url: api.runtime.getURL(`allow.html?requestId=${requestId}`), type: 'popup', width: 420, height: 560 })
+        .then((win) => {
+          const entry = pendingAllow.get(requestId);
+          if (entry) {
+            entry.windowId = win.id;
+          }
+        })
+        .catch((error: unknown) => {
+          pendingAllow.delete(requestId);
+          reject(error);
+        });
+    });
+  }
+
+  async function getAllowRequest(requestId: unknown): Promise<{ request: AllowRequestView }> {
+    const entry = pendingAllow.get(String(requestId ?? ''));
+    if (!entry) {
+      throw new RequestError('not-found');
+    }
+    return { request: entry.view };
+  }
+
+  /** The batch for one Allow decision. Runs inside `serialize()`: the one place that opens the vault to build it, so it never reads a list an import is mid-write on. */
+  async function encryptForSendOutcome(entry: PendingAllow, decision: unknown): Promise<EncryptForSendResult> {
+    if (decision !== 'allow') {
+      return { refused: 'denied' };
+    }
+    const open = await unlocked();
+    if (!open) {
+      return { refused: 'locked' };
+    }
+    const current = await requireVault();
+    const byCode = new Map((await people(fromBase64(open.dataKey), current)).map((p) => [p.code, p]));
+    const rows: SendRow[] = [];
+    for (const code of entry.codes) {
+      const person = byCode.get(code);
+      const phone = person ? normaliseUkMobile(person.phone) : null;
+      if (person && phone) {
+        rows.push({ code, phone, firstName: person.firstName });
+      }
+    }
+    return { batch: await encryptBatch(rows, entry.walledKey.publicKeySpki) };
+  }
+
+  /**
+   * Answers the Allow window itself (board 6/11), and settles the original
+   * `zt:encryptForSend` caller's pending promise. `entry.resolve` always
+   * runs, even when building the batch throws, so that promise never hangs.
+   */
+  async function resolveAllow(requestId: unknown, decision: unknown): Promise<object> {
+    const id = String(requestId ?? '');
+    const entry = pendingAllow.get(id);
+    if (!entry) {
+      throw new RequestError('not-found');
+    }
+    pendingAllow.delete(id);
+    closeAllowWindow(entry);
+    try {
+      entry.resolve(await encryptForSendOutcome(entry, decision));
+    } catch (error) {
+      entry.reject(error);
+      throw error;
+    }
+    return {};
+  }
+
+  /** A window closed with no `zt:resolveAllow`: the same outcome as Deny. */
+  function onWindowRemoved(windowId: number): void {
+    for (const [id, entry] of pendingAllow) {
+      if (entry.windowId === windowId) {
+        pendingAllow.delete(id);
+        entry.resolve({ refused: 'denied' });
+      }
+    }
+  }
+
   function fromExtensionPage(sender: MessageSender): boolean {
     return typeof sender.url === 'string' && sender.url.startsWith(api.runtime.getURL(''));
   }
@@ -693,7 +890,7 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
     if (sender.id !== api.runtime.id || !request || typeof request !== 'object') {
       return { ok: false, error: 'forbidden', message: MESSAGES.forbidden } satisfies Failure;
     }
-    // A content script may ask for names and nothing else.
+    // A content script may ask for names, the codes table, and to encrypt a send batch.
     if (request.type === 'lookupNames') {
       try {
         return { ok: true, ...(await lookupNames(request.ids)) };
@@ -701,8 +898,37 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
         return failure(error);
       }
     }
+    if (request.type === 'zt:listCodes') {
+      try {
+        return await listCodes();
+      } catch (error) {
+        return failure(error);
+      }
+    }
+    if (request.type === 'zt:encryptForSend') {
+      try {
+        return await startEncryptForSend(request);
+      } catch (error) {
+        return failure(error);
+      }
+    }
     if (!fromExtensionPage(sender)) {
       return { ok: false, error: 'forbidden', message: MESSAGES.forbidden } satisfies Failure;
+    }
+    // Only the Allow window (board 6/11) itself sends these.
+    if (request.type === 'zt:getAllowRequest') {
+      try {
+        return { ok: true, ...(await getAllowRequest(request.requestId)) };
+      } catch (error) {
+        return failure(error);
+      }
+    }
+    if (request.type === 'zt:resolveAllow') {
+      try {
+        return { ok: true, ...(await serialize(() => resolveAllow(request.requestId, request.decision))) };
+      } catch (error) {
+        return failure(error);
+      }
     }
     try {
       return { ok: true, ...(await serialize(() => run(request))) };
@@ -765,7 +991,7 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
     await applyIdleInterval();
   }
 
-  return { handle, onIdleState, onCeremonyPort, start };
+  return { handle, onIdleState, onCeremonyPort, onWindowRemoved, start };
 }
 
 /** Registers the listeners. Chrome needs them added on every start of the worker, at the top level. */
@@ -777,6 +1003,7 @@ export function installBackground(api: ChromeApi): Background {
   });
   api.runtime.onConnect.addListener((port) => background.onCeremonyPort(port));
   api.idle.onStateChanged.addListener((idleState) => void background.onIdleState(idleState));
+  api.windows.onRemoved.addListener((windowId) => background.onWindowRemoved(windowId));
   void background.start();
   return background;
 }

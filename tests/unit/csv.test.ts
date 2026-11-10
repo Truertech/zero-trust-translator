@@ -92,6 +92,9 @@ describe('parsePeopleCsv', () => {
           phone: '07700 900000',
           address: '1 High Street',
           postcode: 'AB1 2CD',
+          code: '',
+          firstName: 'Jane',
+          lastName: 'Example',
         },
       ],
       skipped: [],
@@ -101,7 +104,9 @@ describe('parsePeopleCsv', () => {
   it('accepts a "reference" id column and a combined "name" column, with headers in any case and spacing', () => {
     const { imported } = parsePeopleCsv(' Reference , NAME \nR-7,Jane Example\n');
 
-    expect(imported).toEqual([{ username: 'R-7', name: 'Jane Example', email: '', phone: '', address: '', postcode: '', kind: '' }]);
+    expect(imported).toEqual([
+      { username: 'R-7', name: 'Jane Example', email: '', phone: '', address: '', postcode: '', kind: '', code: '', firstName: 'Jane', lastName: 'Example' },
+    ]);
   });
 
   it('keeps the case of the username as it was imported', () => {
@@ -161,6 +166,9 @@ describe('parsePeopleCsv', () => {
       phone: '',
       address: '',
       postcode: '',
+      code: '',
+      firstName: '',
+      lastName: '',
     });
   });
 

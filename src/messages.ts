@@ -68,6 +68,9 @@ export interface PasskeyMessage {
   transports: string[];
 }
 
+/** What a send batch is for (#3919): an SMS, or an event invite by SMS. */
+export type SendOperation = 'sms' | 'eventInvite';
+
 export type Request =
   | { type: 'getState' }
   | { type: 'setupAddPassword'; password: string }
@@ -91,7 +94,11 @@ export type Request =
   | { type: 'removeMethod'; id: string }
   | { type: 'newRecoveryCode' }
   | { type: 'setSettings'; autoLockMinutes?: number; lockWhenPcLocks?: boolean }
-  | { type: 'lookupNames'; ids: string[] };
+  | { type: 'lookupNames'; ids: string[] }
+  | { type: 'zt:listCodes' }
+  | { type: 'zt:encryptForSend'; operation: SendOperation; codes: string[]; template: string; peopleCount: number; origin: string }
+  | { type: 'zt:getAllowRequest'; requestId: string }
+  | { type: 'zt:resolveAllow'; requestId: string; decision: 'allow' | 'deny' };
 
 export type ErrorCode =
   | 'forbidden'
@@ -136,11 +143,68 @@ export interface NamesResponse {
   names: Record<string, string>;
 }
 
+/** One row of board 1's codes table: no PII beyond whether the mobile is valid. */
+export interface CodeView {
+  code: string;
+  username: string;
+  hasValidMobile: boolean;
+}
+
+/**
+ * The page-facing answer to `zt:listCodes`. A locked (or not yet set up)
+ * list refuses rather than answering with no codes, so the page cannot
+ * mistake "nothing to show yet" for "this list is empty".
+ */
+export type ListCodesResult = { codes: CodeView[] } | { refused: 'locked' };
+
+/** One row of the batch the walled Lambda (#3920) decrypts. */
+export interface SendRow {
+  code: string;
+  phone: string;
+  firstName: string;
+}
+
+/** What `encryptBatch` (`send-crypto.ts`) encrypts: the rows, a fresh one-time token and the time, so the walled Lambda can refuse a replayed batch. */
+export interface SendBatchPlaintext {
+  token: string;
+  timestamp: string;
+  rows: SendRow[];
+}
+
+/** The encrypted batch `zt:encryptForSend` answers with, after Allow. Nothing in clear. */
+export interface SendBatch {
+  wrappedKey: string;
+  iv: string;
+  ciphertext: string;
+}
+
+/**
+ * The page-facing answer to `zt:encryptForSend`. Denied, closed with no
+ * decision, a locked list and an origin with no pinned key all refuse
+ * before anything is encrypted.
+ */
+export type EncryptForSendResult = { batch: SendBatch } | { refused: 'denied' | 'locked' | 'unknown-origin' };
+
+/** What the Allow window (board 6/11) shows, read by `zt:getAllowRequest`. */
+export interface AllowRequestView {
+  operation: SendOperation;
+  template: string;
+  peopleCount: number;
+  origin: string;
+}
+
+export interface AllowRequestResponse {
+  request: AllowRequestView;
+}
+
 /** The message the service worker sends to every tab after a lock, an unlock or a list change. */
 export const REFRESH_MESSAGE = 'zt-refresh';
 
 /** The port an extension page holds open while a Windows Hello or security key dialog runs. */
 export const CEREMONY_PORT = 'zt-ceremony';
+
+/** The port `allow.html` holds open for as long as its Allow/Deny decision is pending, so the service worker is not evicted mid-wait. */
+export const ALLOW_PORT = 'zt-allow';
 
 /** What a Windows Hello or security key dialog was for: unlock, a check, a setup method or a new method. */
 export type CeremonyOp = 'unlock' | 'check' | 'setup' | 'add';

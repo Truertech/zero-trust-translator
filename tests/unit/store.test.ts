@@ -28,7 +28,18 @@ describe('types helpers', () => {
   });
 
   it('makes an empty person with only the username set', () => {
-    expect(emptyPerson('u1')).toEqual({ username: 'u1', name: '', email: '', phone: '', address: '', postcode: '', kind: '' });
+    expect(emptyPerson('u1')).toEqual({
+      username: 'u1',
+      name: '',
+      email: '',
+      phone: '',
+      address: '',
+      postcode: '',
+      kind: '',
+      code: '',
+      firstName: '',
+      lastName: '',
+    });
   });
 });
 

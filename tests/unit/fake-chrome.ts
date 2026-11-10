@@ -96,6 +96,16 @@ export class FakeChrome {
   messageListeners: MessageListener[] = [];
   connectListeners: ((port: FakePort) => void)[] = [];
   idleListeners: ((state: string) => void)[] = [];
+  /** Every `windows.create` call (the Allow window, board 6/11). */
+  readonly windowsCreated: { url: string; width: number; height: number }[] = [];
+  readonly windowsRemoved: number[] = [];
+  windowRemovedListeners: ((windowId: number) => void)[] = [];
+  private nextWindowId = 1;
+
+  /** Simulates the admin closing an Allow window, as Chrome fires `onRemoved` for any reason. */
+  fireWindowRemoved(windowId: number): void {
+    this.windowRemovedListeners.forEach((fn) => fn(windowId));
+  }
 
   readonly api: ChromeApi = {
     runtime: {
@@ -123,6 +133,16 @@ export class FakeChrome {
         this.created.push(properties.url);
         return {};
       },
+    },
+    windows: {
+      create: async (createData: { url: string; type: 'popup'; width: number; height: number }) => {
+        this.windowsCreated.push(createData);
+        return { id: this.nextWindowId++ };
+      },
+      remove: async (windowId: number) => {
+        this.windowsRemoved.push(windowId);
+      },
+      onRemoved: { addListener: (fn) => void this.windowRemovedListeners.push(fn) },
     },
   };
 

@@ -20,6 +20,7 @@ import {
   DETAIL_FIELDS,
   MissingIdColumnError,
   emailKey,
+  splitName,
   type DetailField,
   type PersonRecord,
   type SkippedRow,
@@ -82,7 +83,7 @@ export function mergePeople(current: PersonRecord[], incoming: PersonRecord[]): 
       continue;
     }
     let changed = false;
-    for (const field of ['name', 'email', 'phone', 'address', 'postcode', 'kind'] as const) {
+    for (const field of ['name', 'email', 'phone', 'address', 'postcode', 'kind', 'firstName', 'lastName'] as const) {
       const value = person[field];
       if (value !== '' && value !== existing[field]) {
         (existing as unknown as Record<string, string>)[field] = value;
@@ -220,6 +221,9 @@ export function applyNationBuilder(current: PersonRecord[], plan: NbPlan, fields
     }
     for (const change of changesFor(match, fields)) {
       person[change.field] = change.to;
+      if (change.field === 'name') {
+        Object.assign(person, splitName(change.to));
+      }
     }
   }
   return people;

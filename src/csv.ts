@@ -4,7 +4,7 @@
  * commas and doubled quotes (`""` inside a quoted field means one `"`).
  * Both `\n` and `\r\n` line endings are accepted.
  */
-import { MissingIdColumnError, type ParsedPeopleCsv, type PersonKind, type PersonRecord, type SkippedRow } from './types';
+import { MissingIdColumnError, splitName, type ParsedPeopleCsv, type PersonKind, type PersonRecord, type SkippedRow } from './types';
 
 /** Splits CSV text into rows of raw string cells. Trailing blank lines are dropped. */
 export function parseCsvRows(text: string): string[][] {
@@ -126,7 +126,10 @@ export function parsePeopleRows(rows: string[][]): ParsedPeopleCsv {
     const cells = rows[r]!;
     const rowNumber = r + 1; // 1-based, header counted as row 1
     const username = (cells[idIndex] ?? '').trim();
-    const name = column(cells, 'name') || [column(cells, 'firstname'), column(cells, 'lastname')].filter((part) => part.length > 0).join(' ');
+    const firstNameCell = column(cells, 'firstname');
+    const lastNameCell = column(cells, 'lastname');
+    const name = column(cells, 'name') || [firstNameCell, lastNameCell].filter((part) => part.length > 0).join(' ');
+    const { firstName, lastName } = firstNameCell || lastNameCell ? { firstName: firstNameCell, lastName: lastNameCell } : splitName(name);
     const email = column(cells, 'email');
     if (username.length === 0) {
       skipped.push({ row: rowNumber, reason: 'no username', label: name || email });
@@ -144,6 +147,9 @@ export function parsePeopleRows(rows: string[][]): ParsedPeopleCsv {
       address: column(cells, 'address'),
       postcode: column(cells, 'postcode'),
       kind: readKind(column(cells, 'kind')),
+      code: '',
+      firstName,
+      lastName,
     });
   }
   return { imported, skipped };

@@ -39,7 +39,12 @@ function hasUsername(people: PersonRecord[], username: string, except?: string):
   return people.some((p) => usernameKey(p.username) === key && (except === undefined || usernameKey(p.username) !== usernameKey(except)));
 }
 
-/** Adds a person with a username and an email. The name comes from the next import. */
+/**
+ * Adds a person with a username and an email. The name comes from the next
+ * import. A code is not minted here: `people()` in `background.ts` mints
+ * one for every code-less record on the next read, the same path a legacy
+ * record goes through, so there is only one place that mints a code.
+ */
 export function addPerson(people: PersonRecord[], username: string, email: string): PersonRecord[] {
   const trimmed = username.trim();
   if (trimmed.length === 0) {
