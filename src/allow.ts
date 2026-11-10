@@ -7,7 +7,7 @@
  * the request `background.ts` is holding for this window's `requestId`.
  */
 import { ALLOW_PORT, type AllowRequestView, type SendOperation } from './messages';
-import { RequestFailed, call, h } from './ui';
+import { RequestFailed, call, h, svg } from './ui';
 
 const OPERATION_TEXT: Record<SendOperation, string> = {
   sms: 'Send SMS messages',
@@ -24,8 +24,8 @@ function renderError(root: HTMLElement, message: string): void {
 
 function renderRequest(root: HTMLElement, requestId: string, request: AllowRequestView): void {
   const error = h('p', { class: 'err', role: 'alert', testid: 'zt-allow-error' });
-  const deny = h('button', { class: 'btn', type: 'button', testid: 'zt-allow-deny' }, 'Deny');
-  const allow = h('button', { class: 'btn pri', type: 'button', testid: 'zt-allow-allow' }, 'Allow');
+  const deny = h('button', { class: 'btn big', type: 'button', testid: 'zt-allow-deny' }, 'Deny');
+  const allow = h('button', { class: 'btn pri big', type: 'button', testid: 'zt-allow-allow' }, 'Allow');
 
   const decide = (decision: 'allow' | 'deny'): void => {
     deny.disabled = true;
@@ -49,15 +49,15 @@ function renderRequest(root: HTMLElement, requestId: string, request: AllowReque
   root.replaceChildren(
     h(
       'div',
-      { class: 'screen' },
+      { class: 'screen allow' },
       h('div', { class: 'hd' }, h('div', { class: 'ttl' }, request.origin)),
       h(
         'div',
         { class: 'body' },
-        h('p', { class: 'p' }, 'Send encrypted phone number and name to the system for the operation'),
-        h('div', { class: 'banner', testid: 'zt-allow-operation' }, OPERATION_TEXT[request.operation]),
-        h('div', { class: 'ro' }, h('span', {}, 'People'), h('strong', { testid: 'zt-allow-count' }, String(request.peopleCount))),
-        h('div', { class: 'note', testid: 'zt-allow-template' }, request.template),
+        h('p', { class: 'allow-lead' }, 'Send encrypted phone number and name to the system for the operation'),
+        h('div', { class: 'allow-op', testid: 'zt-allow-operation' }, svg('message', 18), h('span', {}, OPERATION_TEXT[request.operation])),
+        h('div', { class: 'allow-count' }, h('span', {}, 'People'), h('strong', { testid: 'zt-allow-count' }, String(request.peopleCount))),
+        h('div', { class: 'allow-template', testid: 'zt-allow-template' }, request.template),
         error,
       ),
       h('div', { class: 'actions' }, deny, allow),
