@@ -924,7 +924,16 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
     return { request: entry.view };
   }
 
-  /** The batch for one Allow decision. Runs inside `serialize()`: the one place that opens the vault to build it, so it never reads a list an import is mid-write on. */
+  /**
+   * The batch for one Allow decision. Runs inside `serialize()`: the one
+   * place that opens the vault to build it, so it never reads a list an
+   * import is mid-write on. The admin's Allow decision was made against
+   * `entry.view.peopleCount` (built by `prepareAllow`, earlier in the same
+   * `serialize()` queue); a storage change in between — an edit, an
+   * import, a delete — run through the same queue can still change the
+   * list before this read, so the match is counted again and the send is
+   * refused, never made short of or different from what the admin saw.
+   */
   async function encryptForSendOutcome(entry: PendingAllow, decision: unknown): Promise<EncryptForSendResult> {
     if (decision !== 'allow') {
       return { refused: 'denied' };
@@ -942,6 +951,9 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
       if (person && phone) {
         rows.push({ code, phone, firstName: person.firstName });
       }
+    }
+    if (rows.length !== entry.view.peopleCount) {
+      return { refused: 'changed' };
     }
     return { batch: await encryptBatch(rows, entry.walledKey.publicKeySpki) };
   }

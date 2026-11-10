@@ -185,9 +185,12 @@ export interface SendBatch {
 /**
  * The page-facing answer to `zt:encryptForSend`. Denied, closed with no
  * decision, a locked list and an origin with no pinned key all refuse
- * before anything is encrypted.
+ * before anything is encrypted. `changed` means the list changed (an
+ * edit, an import, a delete) while the Allow window was open, so the
+ * count the admin saw no longer matches what would be sent — refused
+ * rather than sent short of, or different from, what was shown.
  */
-export type EncryptForSendResult = { batch: SendBatch } | { refused: 'denied' | 'locked' | 'unknown-origin' | 'busy' };
+export type EncryptForSendResult = { batch: SendBatch } | { refused: 'denied' | 'locked' | 'unknown-origin' | 'busy' | 'changed' };
 
 /** What the Allow window (board 6/11) shows, read by `zt:getAllowRequest`. */
 export interface AllowRequestView {

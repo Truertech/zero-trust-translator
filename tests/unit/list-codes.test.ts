@@ -395,6 +395,21 @@ describe('zt:encryptForSend follows the answers on #3919', () => {
     expectOk(await w.send({ type: 'zt:resolveAllow', requestId: thirdId, decision: 'deny' }, ALLOW_SENDER));
     expect(await third).toEqual({ refused: 'denied' });
   });
+
+  it('a person deleted while the Allow window is open is refused as `changed`, not sent short of the shown count', async () => {
+    const codes = codesOf(await w.send<ListCodesResult>({ type: 'zt:listCodes' }));
+    const pending = sendFor([byUsername(codes, 'Macc1').code, byUsername(codes, 'Macc2').code]);
+    const requestId = await requestIdOf(0);
+    const { request } = expectOk(await w.send({ type: 'zt:getAllowRequest', requestId }, ALLOW_SENDER)) as { request: AllowRequestView };
+    expect(request.peopleCount).toBe(2);
+
+    // The admin, in the main popup, deletes one of the two people the open
+    // Allow window already shows a count for.
+    expectOk(await w.send({ type: 'deletePerson', username: 'Macc2' }));
+
+    expectOk(await w.send({ type: 'zt:resolveAllow', requestId, decision: 'allow' }, ALLOW_SENDER));
+    expect(await pending).toEqual({ refused: 'changed' });
+  });
 });
 
 describe('zt:encryptForSend reserves the Allow slot at once (#3919)', () => {
