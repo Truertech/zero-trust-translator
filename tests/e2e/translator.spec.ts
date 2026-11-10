@@ -306,7 +306,7 @@ async function decryptBatch(batch: SendBatch): Promise<{ token: string; timestam
 }
 
 test.describe('send batch (#3919)', () => {
-  test('Allow shows the page's operation wording and the matched count, and encrypts a decryptable batch', async ({ context, extensionId }) => {
+  test("Allow shows the page's operation wording and the matched count, and encrypts a decryptable batch", async ({ context, extensionId }) => {
     const popup = await setUpWithPeople(context, extensionId);
     const page = await context.newPage();
     await page.goto('/page.html');
