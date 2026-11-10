@@ -749,24 +749,32 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
     await api.tabs.create({ url: api.runtime.getURL('popup.html') });
   }
 
-  /** Board 1's codes table (#3919): the code, the username and whether the phone is a valid UK mobile. No name, no phone, no address. */
-  async function listCodes(): Promise<ListCodesResult> {
-    const current = await vault();
-    const open = current ? await unlocked() : undefined;
-    if (!current || !open) {
-      await openUnlockEntry();
-      return { refused: 'locked' };
-    }
-    const list = await smsPeople(fromBase64(open.dataKey), current);
-    // A `ref-` username is a wipe reference, not a platform username (#3919):
-    // it is the code, and the username is reported empty.
-    return {
-      codes: list.map((p) => ({
-        code: p.code,
-        username: isRefCode(usernameKey(p.username)) ? '' : p.username,
-        hasValidMobile: normaliseUkMobile(p.phone) !== null,
-      })),
-    };
+  /**
+   * Board 1's codes table (#3919): the code, the username and whether the
+   * phone is a valid UK mobile. No name, no phone, no address. Runs inside
+   * `serialize()`: `smsPeople` can mint a code or clean up a conflict and
+   * persist it, the same write a CSV import makes, so the read-modify-write
+   * must queue behind every other storage change rather than race it.
+   */
+  function listCodes(): Promise<ListCodesResult> {
+    return serialize(async () => {
+      const current = await vault();
+      const open = current ? await unlocked() : undefined;
+      if (!current || !open) {
+        await openUnlockEntry();
+        return { refused: 'locked' };
+      }
+      const list = await smsPeople(fromBase64(open.dataKey), current);
+      // A `ref-` username is a wipe reference, not a platform username
+      // (#3919): it is the code, and the username is reported empty.
+      return {
+        codes: list.map((p) => ({
+          code: p.code,
+          username: isRefCode(usernameKey(p.username)) ? '' : p.username,
+          hasValidMobile: normaliseUkMobile(p.phone) !== null,
+        })),
+      };
+    });
   }
 
   interface PendingAllow {
@@ -813,19 +821,17 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
   }
 
   /**
-   * Opens the Allow window (board 6) and returns a promise that settles
-   * when the admin decides, or the window closes with no decision. This
-   * runs outside `serialize()`: the wait for the admin is not a storage
-   * change, and serializing it would stall every other request — getState,
-   * a lock, an import — for as long as the window stays open.
+   * Reserves the Allow slot, builds what the Allow window will show, then
+   * opens it and returns a promise that settles when the admin decides, or
+   * the window closes with no decision. Only the build (`prepareAllow`) runs
+   * inside `serialize()`: it can mint a code or clean up a conflict and
+   * persist it, the same write a CSV import makes, so that read-modify-write
+   * must queue behind every other storage change rather than race it. The
+   * wait for the admin that follows is not a storage change, and serializing
+   * it would stall every other request — getState, a lock, an import — for
+   * as long as the window stays open, so it runs outside the queue.
    */
   async function startEncryptForSend(request: Extract<Request, { type: 'zt:encryptForSend' }>): Promise<EncryptForSendResult> {
-    const current = await vault();
-    const open = current ? await unlocked() : undefined;
-    if (!current || !open) {
-      await openUnlockEntry();
-      return { refused: 'locked' };
-    }
     // One Allow window at a time (#3919): a second request while
     // one is open is refused, and the open window stays as it is.
     if (allowReserved) {
@@ -834,7 +840,7 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
     allowReserved = true;
     let prepared: Awaited<ReturnType<typeof prepareAllow>>;
     try {
-      prepared = await prepareAllow(request, open, current);
+      prepared = await serialize(() => prepareAllow(request));
     } catch (error) {
       allowReserved = false;
       throw error;
@@ -846,12 +852,16 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
     return awaitAllow(crypto.randomUUID(), prepared);
   }
 
-  /** Checks the request and builds what the Allow window shows. Runs while the Allow slot is reserved. */
+  /** Checks the request and builds what the Allow window shows. Runs inside `serialize()`, while the Allow slot is reserved. */
   async function prepareAllow(
     request: Extract<Request, { type: 'zt:encryptForSend' }>,
-    open: Unlocked,
-    current: Vault,
-  ): Promise<{ refused: 'unknown-origin' } | Pick<PendingAllow, 'view' | 'codes' | 'walledKey'>> {
+  ): Promise<{ refused: 'locked' } | { refused: 'unknown-origin' } | Pick<PendingAllow, 'view' | 'codes' | 'walledKey'>> {
+    const current = await vault();
+    const open = current ? await unlocked() : undefined;
+    if (!current || !open) {
+      await openUnlockEntry();
+      return { refused: 'locked' };
+    }
     if (!validSendOperation(request.operation)) {
       throw new RequestError('invalid');
     }
