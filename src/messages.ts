@@ -68,8 +68,12 @@ export interface PasskeyMessage {
   transports: string[];
 }
 
-/** What a send batch is for (#3919): an SMS, or an event invite by SMS. */
-export type SendOperation = 'sms' | 'eventInvite';
+/**
+ * The longest operation wording a page may give `zt:encryptForSend` (#3919).
+ * The Translator is a generic encryption step: the page that asks names its
+ * own operation, such as "Send SMS messages", and the Allow window shows it.
+ */
+export const MAX_SEND_OPERATION_LENGTH = 80;
 
 export type Request =
   | { type: 'getState' }
@@ -96,7 +100,7 @@ export type Request =
   | { type: 'setSettings'; autoLockMinutes?: number; lockWhenPcLocks?: boolean }
   | { type: 'lookupNames'; ids: string[] }
   | { type: 'zt:listCodes' }
-  | { type: 'zt:encryptForSend'; operation: SendOperation; codes: string[]; template: string; peopleCount: number; origin: string }
+  | { type: 'zt:encryptForSend'; operation: string; codes: string[]; peopleCount: number; origin: string }
   | { type: 'zt:getAllowRequest'; requestId: string }
   | { type: 'zt:resolveAllow'; requestId: string; decision: 'allow' | 'deny' };
 
@@ -187,8 +191,7 @@ export type EncryptForSendResult = { batch: SendBatch } | { refused: 'denied' | 
 
 /** What the Allow window (board 6/11) shows, read by `zt:getAllowRequest`. */
 export interface AllowRequestView {
-  operation: SendOperation;
-  template: string;
+  operation: string;
   peopleCount: number;
   origin: string;
 }

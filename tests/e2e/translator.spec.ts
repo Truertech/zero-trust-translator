@@ -306,7 +306,7 @@ async function decryptBatch(batch: SendBatch): Promise<{ token: string; timestam
 }
 
 test.describe('send batch (#3919)', () => {
-  test('Allow shows the SMS wording, the matched count and the template, and encrypts a decryptable batch', async ({ context, extensionId }) => {
+  test('Allow shows the page's operation wording and the matched count, and encrypts a decryptable batch', async ({ context, extensionId }) => {
     const popup = await setUpWithPeople(context, extensionId);
     const page = await context.newPage();
     await page.goto('/page.html');
@@ -317,9 +317,8 @@ test.describe('send batch (#3919)', () => {
     // not change the outcome.
     const pending = postToTranslator<EncryptForSendResult>(page, {
       type: 'zt:encryptForSend',
-      operation: 'sms',
+      operation: 'Send SMS messages',
       codes: [codes['Macc1']!, codes['Macc2']!],
-      template: 'Hi [[FirstName]]',
       peopleCount: 2,
       origin: 'https://not-this-page.example',
     });
@@ -327,7 +326,6 @@ test.describe('send batch (#3919)', () => {
     const allowPage = await context.waitForEvent('page');
     await expect(allowPage.getByTestId('zt-allow-operation')).toHaveText('Send SMS messages');
     await expect(allowPage.getByTestId('zt-allow-count')).toHaveText('2');
-    await expect(allowPage.getByTestId('zt-allow-template')).toHaveText('Hi [[FirstName]]');
     await allowPage.getByTestId('zt-allow-allow').click();
 
     const result = await pending;
@@ -354,9 +352,8 @@ test.describe('send batch (#3919)', () => {
 
     const pending = postToTranslator<EncryptForSendResult>(page, {
       type: 'zt:encryptForSend',
-      operation: 'eventInvite',
+      operation: 'Send SMS event invites',
       codes: [codes['Macc1']!],
-      template: 'Join us on Saturday',
       peopleCount: 1,
       origin: 'http://localhost:4321',
     });
@@ -378,9 +375,8 @@ test.describe('send batch (#3919)', () => {
     const [result, openedPage] = await Promise.all([
       postToTranslator<EncryptForSendResult>(page, {
         type: 'zt:encryptForSend',
-        operation: 'sms',
+        operation: 'Send SMS messages',
         codes: ['ref-anything'],
-        template: 'x',
         peopleCount: 1,
         origin: 'http://localhost:4321',
       }),
@@ -402,9 +398,8 @@ test.describe('send batch (#3919)', () => {
     const pagesBefore = context.pages().length;
     const result = await postToTranslator<EncryptForSendResult>(otherPage, {
       type: 'zt:encryptForSend',
-      operation: 'sms',
+      operation: 'Send SMS messages',
       codes: ['ref-anything'],
-      template: 'x',
       peopleCount: 1,
       origin: secondOrigin,
     });
@@ -421,9 +416,8 @@ test.describe('send batch (#3919)', () => {
 
     const pending = postToTranslator<EncryptForSendResult>(page, {
       type: 'zt:encryptForSend',
-      operation: 'sms',
+      operation: 'Send SMS messages',
       codes: [codes['Macc1']!, 'ref-not-in-list'],
-      template: 'Hi',
       peopleCount: 2,
       origin: 'http://localhost:4321',
     });

@@ -1,18 +1,14 @@
 /**
- * The Allow window (#3919): board 6 for `operation: 'sms'`, board 11 for
- * `operation: 'eventInvite'`. It holds `ALLOW_PORT` open for as long as a
+ * The Allow window (#3919, boards 6 and 11). It shows the page origin, the
+ * operation in the page's own words and the matched count, and never the
+ * message: the Translator is a generic encryption step. It holds `ALLOW_PORT` open for as long as a
  * decision is pending, so the service worker is not evicted while it waits
  * for the admin — the same precedent as the ceremony port (`ui.ts`).
  * Nothing here decides what the window shows: `zt:getAllowRequest` reads
  * the request `background.ts` is holding for this window's `requestId`.
  */
-import { ALLOW_PORT, type AllowRequestView, type SendOperation } from './messages';
+import { ALLOW_PORT, type AllowRequestView } from './messages';
 import { RequestFailed, call, h, svg } from './ui';
-
-const OPERATION_TEXT: Record<SendOperation, string> = {
-  sms: 'Send SMS messages',
-  eventInvite: 'Send SMS event invites',
-};
 
 function readRequestId(): string | null {
   return new URLSearchParams(location.search).get('requestId');
@@ -55,9 +51,8 @@ function renderRequest(root: HTMLElement, requestId: string, request: AllowReque
         'div',
         { class: 'body' },
         h('p', { class: 'allow-lead' }, 'Send encrypted phone number and name to the system for the operation'),
-        h('div', { class: 'allow-op', testid: 'zt-allow-operation' }, svg('message', 18), h('span', {}, OPERATION_TEXT[request.operation])),
+        h('div', { class: 'allow-op', testid: 'zt-allow-operation' }, svg('message', 18), h('span', {}, request.operation)),
         h('div', { class: 'allow-count' }, h('span', {}, 'People'), h('strong', { testid: 'zt-allow-count' }, String(request.peopleCount))),
-        h('div', { class: 'allow-template', testid: 'zt-allow-template' }, request.template),
         error,
       ),
       h('div', { class: 'actions' }, deny, allow),

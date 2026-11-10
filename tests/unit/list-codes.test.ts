@@ -168,9 +168,8 @@ describe('zt:encryptForSend', () => {
     const [macc1] = await codesFor(['Macc1']);
     const result = await w.send<EncryptForSendResult>({
       type: 'zt:encryptForSend',
-      operation: 'sms',
+      operation: 'Send SMS messages',
       codes: [macc1!],
-      template: 'Hi [[FirstName]]',
       peopleCount: 1,
       origin: 'https://unknown.example.org',
     });
@@ -182,9 +181,8 @@ describe('zt:encryptForSend', () => {
     await lock(w);
     const result = await w.send<EncryptForSendResult>({
       type: 'zt:encryptForSend',
-      operation: 'sms',
+      operation: 'Send SMS messages',
       codes: ['ref-anything1'],
-      template: 'Hi [[FirstName]]',
       peopleCount: 1,
       origin: PAGE_ORIGIN,
     });
@@ -196,16 +194,15 @@ describe('zt:encryptForSend', () => {
     const [macc1, macc2] = await codesFor(['Macc1', 'Macc2']);
     const pending = w.send<EncryptForSendResult>({
       type: 'zt:encryptForSend',
-      operation: 'sms',
+      operation: '  Send SMS messages  ',
       codes: [macc1!, macc2!, 'ref-not-a-real-code'],
-      template: 'Hi [[FirstName]], see you Saturday.',
       peopleCount: 999,
       origin: PAGE_ORIGIN,
     });
     await vi.waitFor(() => expect(w.chrome.windowsCreated).toHaveLength(1));
     const requestId = new URL(w.chrome.windowsCreated[0]!.url).searchParams.get('requestId')!;
     const { request } = expectOk(await w.send({ type: 'zt:getAllowRequest', requestId }, ALLOW_SENDER)) as { request: AllowRequestView };
-    expect(request).toMatchObject({ operation: 'sms', template: 'Hi [[FirstName]], see you Saturday.', peopleCount: 2, origin: PAGE_ORIGIN });
+    expect(request).toMatchObject({ operation: 'Send SMS messages', peopleCount: 2, origin: PAGE_ORIGIN });
 
     expectOk(await w.send({ type: 'zt:resolveAllow', requestId, decision: 'deny' }, ALLOW_SENDER));
     expect(await pending).toEqual({ refused: 'denied' });
@@ -215,9 +212,8 @@ describe('zt:encryptForSend', () => {
     const [macc1, macc2] = await codesFor(['Macc1', 'Macc2']);
     const pending = w.send<EncryptForSendResult>({
       type: 'zt:encryptForSend',
-      operation: 'eventInvite',
+      operation: 'Send SMS event invites',
       codes: [macc1!, macc2!],
-      template: 'Can you come? [[RsvpLink]]',
       peopleCount: 2,
       origin: PAGE_ORIGIN,
     });
@@ -249,9 +245,8 @@ describe('zt:encryptForSend', () => {
     const [macc1] = await codesFor(['Macc1']);
     const pending = w.send<EncryptForSendResult>({
       type: 'zt:encryptForSend',
-      operation: 'sms',
+      operation: 'Send SMS messages',
       codes: [macc1!],
-      template: 'Hi [[FirstName]]',
       peopleCount: 1,
       origin: PAGE_ORIGIN,
     });
@@ -342,7 +337,7 @@ describe('zt:encryptForSend follows the answers on #3919', () => {
   }, SLOW);
 
   function sendFor(codes: string[]): Promise<EncryptForSendResult> {
-    return w.send<EncryptForSendResult>({ type: 'zt:encryptForSend', operation: 'sms', codes, template: 'Hi [[FirstName]]', peopleCount: codes.length, origin: PAGE_ORIGIN });
+    return w.send<EncryptForSendResult>({ type: 'zt:encryptForSend', operation: 'Send SMS messages', codes, peopleCount: codes.length, origin: PAGE_ORIGIN });
   }
 
   async function requestIdOf(index: number): Promise<string> {
@@ -410,8 +405,8 @@ describe('zt:encryptForSend reserves the Allow slot at once (#3919)', () => {
     await setUp(w);
   }, SLOW);
 
-  function sendFor(codes: string[], origin = PAGE_ORIGIN, operation: unknown = 'sms'): Promise<EncryptForSendResult> {
-    return w.send<EncryptForSendResult>({ type: 'zt:encryptForSend', operation, codes, template: 'Hi [[FirstName]]', peopleCount: codes.length, origin });
+  function sendFor(codes: string[], origin = PAGE_ORIGIN, operation: unknown = 'Send SMS messages'): Promise<EncryptForSendResult> {
+    return w.send<EncryptForSendResult>({ type: 'zt:encryptForSend', operation, codes, peopleCount: codes.length, origin });
   }
 
   async function denyWindow(index: number): Promise<void> {
@@ -434,8 +429,11 @@ describe('zt:encryptForSend reserves the Allow slot at once (#3919)', () => {
   it('gives the slot back after an origin with no pinned key, and after a refused request', async () => {
     const jane = byUsername(codesOf(await w.send<ListCodesResult>({ type: 'zt:listCodes' })), 'Macc1').code;
     expect(await sendFor([jane], 'https://unknown.example.org')).toEqual({ refused: 'unknown-origin' });
-    expect(await sendFor([jane], PAGE_ORIGIN, 'fax')).toMatchObject({ ok: false, error: 'invalid' });
-    const next = sendFor([jane]);
+    for (const operation of ['', '   ', 42, 'x'.repeat(81)]) {
+      expect(await sendFor([jane], PAGE_ORIGIN, operation)).toMatchObject({ ok: false, error: 'invalid' });
+    }
+    // The longest wording a page may give is still a valid request.
+    const next = sendFor([jane], PAGE_ORIGIN, 'x'.repeat(80));
     await denyWindow(0);
     expect(await next).toEqual({ refused: 'denied' });
   });

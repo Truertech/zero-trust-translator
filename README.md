@@ -63,12 +63,13 @@ never calls a server itself.
   walled store) still applies to the person.
 - A page marker (`data-zt-id`) shows the name when it holds the person's
   username or the person's code.
-- `zt:encryptForSend` takes the operation (`sms` or `eventInvite`), the
-  codes to send to, a message template and the page's own count of people.
-  It never encrypts anything before the admin presses Allow in a window
-  this extension opens, which shows the real operation, the matched count
-  — read from the admin's own list, never the page's claim — and the
-  template. On Allow it builds a batch of a fresh one-time token, the time,
+- `zt:encryptForSend` takes the operation in the page's own words (1 to 80
+  characters, for example "Send SMS messages"), the codes to send to and the
+  page's own count of people. The Translator is a generic encryption step,
+  so it shows no message text. It never encrypts anything before the admin
+  presses Allow in a window this extension opens, which shows the page
+  origin, the operation wording and the matched count — read from the
+  admin's own list, never the page's claim. On Allow it builds a batch of a fresh one-time token, the time,
   and each matched code's phone number (E.164) and first name (a person
   saved with no first and no last name, such as a list from before this
   feature, gets `name` split on the first space when the list is read);

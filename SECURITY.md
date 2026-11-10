@@ -43,8 +43,9 @@ to encrypt a batch of phone numbers and first names for the walled Lambda
 calling a server itself.
 
 - The admin must press Allow in a window this extension opens; nothing is
-  encrypted before that, and the window shows the real operation, the
-  matched count and the template, read from the admin's own list.
+  encrypted before that, and the window shows the page origin (from
+  Chrome, so the page cannot forge it), the operation in the page's own
+  words, and the matched count, read from the admin's own list.
 - The batch (a one-time token, the time, and each matched person's E.164
   phone number and first name) is encrypted with a fresh, random AES-256-GCM
   key. That key is then wrapped with RSA-OAEP-SHA-256 under the walled

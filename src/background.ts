@@ -16,6 +16,7 @@ import {
   AUTO_LOCK_CHOICES,
   CEREMONY_PORT,
   CHECK_WINDOW_MS,
+  MAX_SEND_OPERATION_LENGTH,
   PASSWORD_LOCKOUT_MS,
   REFRESH_MESSAGE,
   type AllowRequestView,
@@ -30,7 +31,6 @@ import {
   type PasskeyMessage,
   type Request,
   type SecretMessage,
-  type SendOperation,
   type SendRow,
   type Settings,
   type StateView,
@@ -810,8 +810,11 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
     allowReserved = false;
   }
 
-  function validSendOperation(value: unknown): value is SendOperation {
-    return value === 'sms' || value === 'eventInvite';
+  /** The page's own wording for the operation, trimmed, or `null` when it is not a string of 1 to `MAX_SEND_OPERATION_LENGTH` characters. */
+  function sendOperationWording(value: unknown): string | null {
+    if (typeof value !== 'string') return null;
+    const wording = value.trim();
+    return wording.length > 0 && wording.length <= MAX_SEND_OPERATION_LENGTH ? wording : null;
   }
 
   function closeAllowWindow(entry: PendingAllow): void {
@@ -862,7 +865,8 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
       await openUnlockEntry();
       return { refused: 'locked' };
     }
-    if (!validSendOperation(request.operation)) {
+    const operation = sendOperationWording(request.operation);
+    if (operation === null) {
       throw new RequestError('invalid');
     }
     const codes = Array.isArray(request.codes) ? request.codes.filter((c): c is string => typeof c === 'string') : [];
@@ -885,8 +889,7 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
       return person !== undefined && normaliseUkMobile(person.phone) !== null;
     }).length;
     const view: AllowRequestView = {
-      operation: request.operation,
-      template: typeof request.template === 'string' ? request.template : '',
+      operation,
       peopleCount: matchedCount,
       origin,
     };
