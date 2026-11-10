@@ -6,7 +6,7 @@
  * Nothing here decides what the window shows: `zt:getAllowRequest` reads
  * the request `background.ts` is holding for this window's `requestId`.
  */
-import { ALLOW_PORT, send, type AllowRequestView, type SendOperation } from './messages';
+import { ALLOW_PORT, type AllowRequestView, type SendOperation } from './messages';
 import { RequestFailed, call, h } from './ui';
 
 const OPERATION_TEXT: Record<SendOperation, string> = {
@@ -23,16 +23,25 @@ function renderError(root: HTMLElement, message: string): void {
 }
 
 function renderRequest(root: HTMLElement, requestId: string, request: AllowRequestView): void {
-  const error = h('p', { class: 'err', role: 'alert' });
+  const error = h('p', { class: 'err', role: 'alert', testid: 'zt-allow-error' });
   const deny = h('button', { class: 'btn', type: 'button', testid: 'zt-allow-deny' }, 'Deny');
   const allow = h('button', { class: 'btn pri', type: 'button', testid: 'zt-allow-allow' }, 'Allow');
 
   const decide = (decision: 'allow' | 'deny'): void => {
     deny.disabled = true;
     allow.disabled = true;
-    // `background.ts` closes this window once it has settled the decision;
-    // nothing here needs the reply, so a torn-down page mid-flight is fine.
-    void send({ type: 'zt:resolveAllow', requestId, decision }).catch(() => undefined);
+    error.textContent = '';
+    // `background.ts` closes this window once it settles the decision as a
+    // success: the page tears down before the reply arrives, so a rejection
+    // from that is expected and ignored. A reply that arrives with
+    // `ok: false` means the window did NOT close, so it must say so and let
+    // the admin try again instead of leaving two disabled buttons with no
+    // explanation.
+    call({ type: 'zt:resolveAllow', requestId, decision }).catch((caught: unknown) => {
+      deny.disabled = false;
+      allow.disabled = false;
+      error.textContent = caught instanceof RequestFailed ? caught.message : 'That did not work. Try again, or close this window.';
+    });
   };
   deny.addEventListener('click', () => decide('deny'));
   allow.addEventListener('click', () => decide('allow'));
