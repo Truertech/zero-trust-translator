@@ -110,7 +110,9 @@ jobs:
         run: npm run build:check
 
       - name: Build the release zip
-        run: npm run build
+        run: |
+          npm run build
+          echo "ZIP=zero-trust-translator-${RELEASE_TAG#v}.zip" >> "$GITHUB_ENV"
         env:
           SOURCE_DATE_EPOCH: ${{ env.SOURCE_DATE_EPOCH }}
 
@@ -119,15 +121,26 @@ jobs:
       - name: Attach build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          subject-path: dist.zip
+          subject-path: ${{ env.ZIP }}
 
       - name: Publish the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${RELEASE_TAG}" dist.zip dist.zip.sha256 \
-            --title "${RELEASE_TAG}" \
-            --notes "Built from $(git rev-parse HEAD). SHA-256: $(cat dist.zip.sha256)."
+          {
+            echo '## Install'
+            echo ''
+            echo "1. Download \`${ZIP}\` below and unzip it into a folder."
+            echo '2. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and pick that folder.'
+            echo ''
+            echo '## Check'
+            echo ''
+            echo "Built by CI from commit $(git rev-parse HEAD)."
+            echo "SHA-256 of \`${ZIP}\`: \`$(cat "${ZIP}.sha256")\`"
+          } > release-notes.md
+          gh release create "${RELEASE_TAG}" "${ZIP}" "${ZIP}.sha256" \
+            --title "Zero Trust Translator ${RELEASE_TAG#v}" \
+            --notes-file release-notes.md
 
       - name: Record whether the Chrome Web Store secrets are present
         # A secret cannot be read directly in an `if:` condition (GitHub
@@ -164,7 +177,7 @@ jobs:
           UPLOAD_RESPONSE=$(curl -fsS -X PUT \
             -H "Authorization: Bearer ${ACCESS_TOKEN}" \
             -H "x-goog-api-version: 2" \
-            -T dist.zip \
+            -T "${ZIP}" \
             "https://www.googleapis.com/upload/chromewebstore/v1.1/items/${CWS_EXTENSION_ID}")
           echo "Upload response: ${UPLOAD_RESPONSE}"
           printf '%s' "$UPLOAD_RESPONSE" | node -e "

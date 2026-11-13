@@ -8,6 +8,7 @@
 //                                   the web app.
 //                                   Never upload this build.
 //
+// The release build writes `dist/` and `zero-trust-translator-<version>.zip`.
 // `OUT_DIR` (default `dist`) chooses the output folder and the zip name;
 // `scripts/build-check.mjs` builds twice into two different `OUT_DIR`s to
 // compare them. `SOURCE_DATE_EPOCH` (default `0`) is the one timestamp every
@@ -97,11 +98,14 @@ function main() {
   }
   files.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   const zip = buildDeterministicZip(files, sourceDateEpoch);
-  const zipPath = join(ROOT, `${outDirName}.zip`);
+  // The release build names the zip after the version; a dev build or an
+  // `OUT_DIR` build names it after the output folder.
+  const zipName = process.env['OUT_DIR'] || isDev ? `${outDirName}.zip` : `zero-trust-translator-${version}.zip`;
+  const zipPath = join(ROOT, zipName);
   writeFileSync(zipPath, zip);
 
   const sha256 = createHash('sha256').update(zip).digest('hex');
-  writeFileSync(join(ROOT, `${outDirName}.zip.sha256`), `${sha256}\n`);
+  writeFileSync(join(ROOT, `${zipName}.sha256`), `${sha256}\n`);
   console.log(`Built ${zipPath}`);
   console.log(`SHA-256: ${sha256}`);
 }

@@ -118,7 +118,7 @@ unpacked", and select the `dist/` folder this prints.
 npm ci
 npm run typecheck
 npm test              # vitest: the vault, the service worker, the CSV and NationBuilder import, passwords, the no-network check, the zip writer
-npm run build          # the release build -> dist/, dist.zip, dist.zip.sha256
+npm run build          # the release build -> dist/, zero-trust-translator-<version>.zip and its .sha256
 npm run build:check    # builds twice in clean directories and compares the SHA-256
 npm run check-no-network   # fails if dist/ can reach the network
 npm run test:e2e       # Playwright, against the extension's own fixture page (needs a leased box: see this repository's own CLAUDE.md-equivalent rule against running Playwright on a bare machine if you use the persona fleet)
@@ -157,12 +157,12 @@ cd zero-trust-translator
 git checkout v<version>
 npm ci
 SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) npm run build
-sha256sum dist.zip   # compare with the "dist.zip.sha256" the GitHub release attaches
+sha256sum zero-trust-translator-<version>.zip   # compare with the .sha256 file the GitHub release attaches
 ```
 
 A match proves this exact source produces the exact zip the release
 published — the attached `actions/attest-build-provenance` signature
-(verify with `gh attestation verify dist.zip --repo Truertech/zero-trust-translator`)
+(verify with `gh attestation verify zero-trust-translator-<version>.zip --repo Truertech/zero-trust-translator`)
 proves CI, not a human's machine, built that zip from that source.
 
 ### Checking the package the Chrome Web Store serves against the release zip
