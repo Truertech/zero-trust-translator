@@ -117,7 +117,7 @@ describe('planNationBuilderImport', () => {
           ],
         },
       ],
-      notInList: [],
+      newPeople: [],
       noEmail: [],
       duplicate: [],
     });
@@ -147,14 +147,14 @@ describe('planNationBuilderImport', () => {
     expect(planNationBuilderImport(rows, 'nb-all', [jane]).matched[0]!.changes).toEqual([{ field: 'name', from: 'Jane Example', to: 'Jane B. Example' }]);
   });
 
-  it('sorts unmatched rows into "Email not in your list", "No email" and "Email twice in the file", and the counts add up to the row count', () => {
+  it('sorts unmatched rows into "New people", "No email" and "Email twice in the file", and the counts add up to the row count', () => {
     const rows = parseCsvRows(
       [
         MEMBER_HEADER,
         'Jane Example,,,,jane@example.org,07700 900001,', // matched, up to date
         'No Email,,,,,,', // no email
         'Not An Email,,,,not-an-email,,', // no @
-        'Stranger,,,,stranger@example.org,,', // not in list
+        'Stranger,9 Far Lane,ZZ1 1ZZ,,Stranger@Example.org ,07700 900009,', // not in list
         'Jane Twice,,,,JANE@example.org,,', // duplicate of a matched row
         'Stranger Twice,,,,stranger@example.org,,', // duplicate of an unmatched row
       ].join('\n'),
@@ -167,12 +167,14 @@ describe('planNationBuilderImport', () => {
       { row: 3, reason: 'no email', label: 'No Email' },
       { row: 4, reason: 'no email', label: 'Not An Email' },
     ]);
-    expect(plan.notInList).toEqual([{ row: 5, reason: 'not in list', label: 'stranger@example.org' }]);
+    expect(plan.newPeople).toEqual([
+      { row: 5, email: 'stranger@example.org', values: { name: 'Stranger', phone: '07700 900009', address: '9 Far Lane', postcode: 'ZZ1 1ZZ' } },
+    ]);
     expect(plan.duplicate).toEqual([
       { row: 6, reason: 'duplicate', label: 'jane@example.org' },
       { row: 7, reason: 'duplicate', label: 'stranger@example.org' },
     ]);
-    expect(plan.matched.length + plan.noEmail.length + plan.notInList.length + plan.duplicate.length).toBe(plan.rowCount);
+    expect(plan.matched.length + plan.noEmail.length + plan.newPeople.length + plan.duplicate.length).toBe(plan.rowCount);
     expect(plan.rowCount).toBe(6);
   });
 
@@ -208,7 +210,7 @@ describe('countMatches and skippedRows', () => {
     format: 'nb-member' as const,
     rowCount: 5,
     matched: [match, { ...match, row: 3, username: 'macc2', changes: [] }],
-    notInList: [{ row: 6, reason: 'not in list' }],
+    newPeople: [{ row: 6, email: 'new@example.org', values: { name: 'New', phone: '', address: '', postcode: '' } }],
     noEmail: [{ row: 4, reason: 'no email' }],
     duplicate: [{ row: 5, reason: 'duplicate' }],
   };
@@ -220,13 +222,13 @@ describe('countMatches and skippedRows', () => {
     expect(countMatches(plan, fields)).toEqual(expected);
   });
 
-  it('lists every skipped row in file order', () => {
-    expect(skippedRows(plan).map((s) => s.row)).toEqual([4, 5, 6]);
+  it('lists every skipped row in file order, and a new person is not a skipped row', () => {
+    expect(skippedRows(plan).map((s) => s.row)).toEqual([4, 5]);
   });
 });
 
 describe('applyNationBuilder', () => {
-  const plan = { format: 'nb-member' as const, rowCount: 1, matched: [match], notInList: [], noEmail: [], duplicate: [] };
+  const plan = { format: 'nb-member' as const, rowCount: 1, matched: [match], newPeople: [], noEmail: [], duplicate: [] };
 
   it('writes only the ticked fields and leaves the unticked ones unchanged, without changing the input', () => {
     const input = [jane, bob];
@@ -237,6 +239,57 @@ describe('applyNationBuilder', () => {
 
   it('skips a match whose person was removed after the preview', () => {
     expect(applyNationBuilder([bob], plan, DETAIL_FIELDS)).toEqual([bob]);
+  });
+
+  const newPlan = {
+    ...plan,
+    matched: [],
+    newPeople: [{ row: 3, email: 'new@example.org', values: { name: 'Nina New Person', phone: '07700 900003', address: '3 New St', postcode: 'NN1 1NN' } }],
+  };
+
+  it('adds a new person with a ref- code as the username, the email, and every ticked field, with the name split', () => {
+    expect(applyNationBuilder([bob], newPlan, DETAIL_FIELDS, () => 'ref-aaaaaaaa')).toEqual([
+      bob,
+      {
+        ...emptyPerson('ref-aaaaaaaa'),
+        email: 'new@example.org',
+        name: 'Nina New Person',
+        phone: '07700 900003',
+        address: '3 New St',
+        postcode: 'NN1 1NN',
+        firstName: 'Nina',
+        lastName: 'New Person',
+      },
+    ]);
+  });
+
+  it('leaves the unticked fields of a new person empty', () => {
+    expect(applyNationBuilder([], newPlan, ['phone'], () => 'ref-aaaaaaaa')).toEqual([{ ...emptyPerson('ref-aaaaaaaa'), email: 'new@example.org', phone: '07700 900003' }]);
+  });
+
+  it('skips a new person whose email was added to the list after the preview, compared trimmed and lower-case', () => {
+    const already = person('macc9', { email: ' NEW@example.org' });
+
+    expect(applyNationBuilder([already], newPlan, DETAIL_FIELDS, () => 'ref-aaaaaaaa')).toEqual([already]);
+  });
+
+  it('mints a fresh ref- code by default', () => {
+    const [added] = applyNationBuilder([], newPlan, DETAIL_FIELDS);
+
+    expect(added!.username).toMatch(/^ref-[a-z0-9]{8}$/);
+  });
+});
+
+describe('applyCsv with a NationBuilder file', () => {
+  it('adds the new people, updates the matched people, and counts both in the result', () => {
+    const text = [MEMBER_HEADER, 'Jane A. Example,,,,jane@example.org,,', 'Nina New,,,,nina@example.org,07700 900004,', ',,,,,,'].join('\n');
+
+    const { people, result } = applyCsv(text, [jane, bob], DETAIL_FIELDS);
+
+    expect(result).toEqual({ kind: 'nationbuilder', added: 1, updated: 1, unchanged: 0, skipped: [{ row: 4, reason: 'no email', label: '' }] });
+    expect(people).toHaveLength(3);
+    expect(people[2]).toMatchObject({ email: 'nina@example.org', name: 'Nina New', phone: '07700 900004', firstName: 'Nina', lastName: 'New' });
+    expect(people[2]!.username).toMatch(/^ref-/);
   });
 });
 

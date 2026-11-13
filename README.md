@@ -30,7 +30,8 @@ else.
   `host_permissions`, no network call, no remote font or image, no analytics
   and no `chrome.storage.sync`.
 - The popup imports `people.csv` (the wipe download), a NationBuilder
-  Export CSV (matched to usernames by email), an encrypted `.ztbackup` file,
+  Export CSV (matched by email; an email not in the list adds a new person
+  with no username, for the admin to type later), an encrypted `.ztbackup` file,
   or any CSV with a `username` or `reference` column. It adds, edits,
   deletes and searches people, and exports an encrypted backup only.
 - It does not change what the web app sends or stores.

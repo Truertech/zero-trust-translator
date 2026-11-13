@@ -9,16 +9,21 @@
  *   A cell with a value replaces what the list holds; an empty cell keeps it.
  * - NATIONBUILDER EXPORT: no username at all, so each row
  *   is matched to a person in the list by email, compared trimmed and
- *   lower-case. A matched row changes only the ticked fields.
+ *   lower-case. A matched row changes only the ticked fields. A row whose
+ *   email is not in the list adds a new person with the ticked fields and
+ *   a `ref-` code in place of the username; the admin types the username
+ *   later.
  *
  * Every function here is pure, so the service worker can make the preview
  * and then make the same plan again when the admin confirms it.
  */
+import { newCode } from './code';
 import { normaliseHeader, parseCsvRows, parsePeopleRows } from './csv';
 import {
   DETAIL_FIELDS,
   MissingIdColumnError,
   emailKey,
+  emptyPerson,
   splitName,
   type DetailField,
   type PersonRecord,
@@ -114,11 +119,18 @@ export interface NbMatch {
   changes: FieldChange[];
 }
 
+/** One row whose email is not in the list: a new person, with the row's values. */
+export interface NbNew {
+  row: number;
+  email: string;
+  values: Record<DetailField, string>;
+}
+
 export interface NbPlan {
   format: 'nb-member' | 'nb-all';
   rowCount: number;
   matched: NbMatch[];
-  notInList: SkippedRow[];
+  newPeople: NbNew[];
   noEmail: SkippedRow[];
   duplicate: SkippedRow[];
 }
@@ -149,7 +161,7 @@ export function planNationBuilderImport(rows: string[][], format: 'nb-member' | 
       byEmail.set(key, person);
     }
   }
-  const plan: NbPlan = { format, rowCount: rows.length - 1, matched: [], notInList: [], noEmail: [], duplicate: [] };
+  const plan: NbPlan = { format, rowCount: rows.length - 1, matched: [], newPeople: [], noEmail: [], duplicate: [] };
   const seen = new Set<string>();
   for (let r = 1; r < rows.length; r += 1) {
     const cells = rows[r]!;
@@ -165,11 +177,6 @@ export function planNationBuilderImport(rows: string[][], format: 'nb-member' | 
       continue;
     }
     seen.add(email);
-    const person = byEmail.get(email);
-    if (!person) {
-      plan.notInList.push({ row, reason: 'not in list', label: email });
-      continue;
-    }
     const address =
       format === 'nb-member'
         ? cell(cells, 'address')
@@ -183,6 +190,11 @@ export function planNationBuilderImport(rows: string[][], format: 'nb-member' | 
       address: realValue(address, email),
       postcode: realValue(cell(cells, 'postcode'), email),
     };
+    const person = byEmail.get(email);
+    if (!person) {
+      plan.newPeople.push({ row, email, values: incoming });
+      continue;
+    }
     const changes: FieldChange[] = [];
     for (const field of DETAIL_FIELDS) {
       if (incoming[field] !== '' && incoming[field] !== person[field]) {
@@ -207,10 +219,17 @@ export function countMatches(plan: NbPlan, fields: readonly DetailField[]): { ch
 
 /** Every skipped row of the plan, in file order. */
 export function skippedRows(plan: NbPlan): SkippedRow[] {
-  return [...plan.notInList, ...plan.noEmail, ...plan.duplicate].sort((a, b) => a.row - b.row);
+  return [...plan.noEmail, ...plan.duplicate].sort((a, b) => a.row - b.row);
 }
 
-export function applyNationBuilder(current: PersonRecord[], plan: NbPlan, fields: readonly DetailField[]): PersonRecord[] {
+/**
+ * Applies the plan: the ticked fields of each matched person change, and
+ * each new person is added with the ticked fields. A new person has no
+ * username yet, so the username is a fresh `ref-` code (`mint`), which
+ * `ensureCoded` also takes as the person's code. A new person whose email
+ * was added to the list after the preview is skipped.
+ */
+export function applyNationBuilder(current: PersonRecord[], plan: NbPlan, fields: readonly DetailField[], mint: () => string = newCode): PersonRecord[] {
   const people = current.map((p) => ({ ...p }));
   const byKey = new Map(people.map((p) => [usernameKey(p.username), p]));
   for (const match of plan.matched) {
@@ -224,6 +243,18 @@ export function applyNationBuilder(current: PersonRecord[], plan: NbPlan, fields
         Object.assign(person, splitName(change.to));
       }
     }
+  }
+  const emails = new Set(people.map((p) => emailKey(p.email)).filter((e) => e !== ''));
+  for (const entry of plan.newPeople) {
+    if (emails.has(entry.email)) {
+      continue;
+    }
+    emails.add(entry.email);
+    const added: PersonRecord = { ...emptyPerson(mint()), email: entry.email };
+    for (const field of fields) {
+      added[field] = entry.values[field];
+    }
+    people.push({ ...added, ...splitName(added.name) });
   }
   return people;
 }
@@ -265,7 +296,7 @@ export function applyCsv(text: string, current: PersonRecord[], fields: readonly
     const { changed, upToDate } = countMatches(preview.plan, fields);
     return {
       people: applyNationBuilder(current, preview.plan, fields),
-      result: { kind: 'nationbuilder', added: 0, updated: changed, unchanged: upToDate, skipped: skippedRows(preview.plan) },
+      result: { kind: 'nationbuilder', added: preview.plan.newPeople.length, updated: changed, unchanged: upToDate, skipped: skippedRows(preview.plan) },
     };
   }
   const merged = mergePeople(current, preview.imported);

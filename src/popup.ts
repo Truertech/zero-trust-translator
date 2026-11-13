@@ -3,11 +3,12 @@
  * list of its own: every read and write is a message to the service worker
  * (`background.ts`), which holds the data key while the list is unlocked.
  */
+import { isRefCode } from './code';
 import { countMatches, isBackupText, type CsvPreview, type ImportResult, type NbPlan } from './import';
 import { PASSWORD_LOCKOUT_MS, type SecretMessage, type StateView } from './messages';
 import { passwordForm } from './password-form';
 import { searchPeople } from './store';
-import { DETAIL_FIELDS, type DetailField, type PersonKind, type PersonRecord } from './types';
+import { DETAIL_FIELDS, type DetailField, type PersonKind, type PersonRecord, usernameKey } from './types';
 import {
   RequestFailed,
   autoLockLabel,
@@ -571,7 +572,19 @@ function readOnlyRow(label: string, value: string): HTMLElement {
 }
 
 function showEdit(person: PersonRecord): void {
-  const username = h('input', { id: 'zid', class: 'mono', value: person.username, testid: 'zt-person-username', autocomplete: 'off', spellcheck: 'false', autofocus: true });
+  // A `ref-` username is a placeholder (a wipe reference, or a person added
+  // from a NationBuilder file): the field starts empty for the real username.
+  const placeholder = isRefCode(usernameKey(person.username));
+  const username = h('input', {
+    id: 'zid',
+    class: 'mono',
+    value: placeholder ? '' : person.username,
+    placeholder: placeholder ? 'Type the username' : undefined,
+    testid: 'zt-person-username',
+    autocomplete: 'off',
+    spellcheck: 'false',
+    autofocus: true,
+  });
   const error = h('p', { class: 'err', testid: 'zt-edit-error', role: 'alert', style: 'margin:0' });
   const save = h('button', { class: 'btn pri', type: 'button', testid: 'zt-person-save' }, 'Save');
   save.addEventListener('click', () => {
@@ -738,7 +751,7 @@ function showImportChoose(message = ''): void {
           {},
           h('div', { class: 'sect' }, 'Files you can import'),
           format('ZT', 'people.csv', 'From the Zero Trust download'),
-          format('NB', 'NationBuilder Export', 'Matched to usernames by email'),
+          format('NB', 'NationBuilder Export', 'Matched by email; new emails are added'),
           format('ZT', 'Encrypted backup', 'A .ztbackup file from Export backup'),
           format('CSV', 'Other CSV', 'Columns username or reference, and name', true),
         ),
@@ -753,7 +766,7 @@ function plural(count: number, one: string, many: string): string {
 
 function showNbPreview(fileName: string, text: string, preview: Extract<CsvPreview, { kind: 'nationbuilder' }>, fields: DetailField[]): void {
   const plan = preview.plan;
-  const notImported = plan.notInList.length + plan.noEmail.length + plan.duplicate.length;
+  const notImported = plan.noEmail.length + plan.duplicate.length;
   const summary = h('div', { testid: 'zt-import-summary' });
   const review = h('button', { class: 'btn pri', type: 'button', testid: 'zt-import-review' });
   const line = (label: string, value: number, extra: string, colour?: string) =>
@@ -764,13 +777,14 @@ function showNbPreview(fileName: string, text: string, preview: Extract<CsvPrevi
       line('Matched to a username by email', plan.matched.length, 'rule', '#0F766E'),
       line('Name or details change', changed, 'sub'),
       line('Already up to date', upToDate, 'sub rule'),
+      line('New people, no username yet', plan.newPeople.length, 'rule', '#0F766E'),
       line('Not imported', notImported, 'rule', '#B42318'),
-      line('Email not in your list', plan.notInList.length, 'sub'),
       line('No email', plan.noEmail.length, 'sub'),
       line('Email twice in the file', plan.duplicate.length, 'sub'),
     );
-    review.textContent = changed === 0 ? 'Nothing to update' : `Review ${plural(changed, 'change', 'changes')}`;
-    review.disabled = changed === 0;
+    const total = changed + plan.newPeople.length;
+    review.textContent = total === 0 ? 'Nothing to update' : `Review ${plural(total, 'change', 'changes')}`;
+    review.disabled = total === 0;
   };
   review.addEventListener('click', () => showNbConfirm(fileName, text, preview, fields));
   const fieldBoxes = DETAIL_FIELDS.map((field) => {
@@ -796,15 +810,15 @@ function showNbPreview(fileName: string, text: string, preview: Extract<CsvPrevi
           h('div', { style: 'flex:1;min-width:0' }, h('div', { class: 'nm mono' }, fileName), h('div', { class: 'meta' }, `${preview.label} · ${plural(preview.rowCount, 'row', 'rows')}`)),
         ),
         summary,
-        plan.notInList.length > 0 &&
+        plan.newPeople.length > 0 &&
           h(
             'div',
-            { class: 'note warn' },
-            svg('alert', 18, 2, '#8A4B00'),
+            { class: 'note', testid: 'zt-import-new-note' },
+            svg('alert', 18, 2),
             h(
               'span',
               {},
-              `${plan.notInList.length === 1 ? '1 email has' : `${plan.notInList.length} emails have`} no username yet. Import people.csv from the Zero Trust download first to add them.`,
+              `${plan.newPeople.length === 1 ? '1 email is' : `${plan.newPeople.length} emails are`} not in your list. ${plan.newPeople.length === 1 ? 'It is' : 'They are'} added with no username. Open each person in the list to type the username.`,
             ),
           ),
         h('div', {}, h('div', { class: 'label' }, 'Fields to update'), h('div', { class: 'fields' }, ...fieldBoxes)),
@@ -818,7 +832,7 @@ function showNbPreview(fileName: string, text: string, preview: Extract<CsvPrevi
 const SHOWN_CHANGES = 4;
 
 function showNbConfirm(fileName: string, text: string, preview: Extract<CsvPreview, { kind: 'nationbuilder' }>, fields: DetailField[]): void {
-  const changed = changedMatches(preview.plan, fields);
+  const changed = [...changedMatches(preview.plan, fields), ...newMatches(preview.plan, fields)];
   const changeBlock = (match: (typeof changed)[number]) =>
     h(
       'div',
@@ -837,7 +851,7 @@ function showNbConfirm(fileName: string, text: string, preview: Extract<CsvPrevi
     });
     list.append(more);
   }
-  const confirm = h('button', { class: 'btn pri', type: 'button', testid: 'zt-import-confirm' }, `Update ${plural(changed.length, 'person', 'people')}`);
+  const confirm = h('button', { class: 'btn pri', type: 'button', testid: 'zt-import-confirm' }, `Import ${plural(changed.length, 'change', 'changes')}`);
   const error = h('p', { class: 'err', role: 'alert', style: 'margin:0 16px' });
   confirm.addEventListener('click', () => {
     void (async () => {
@@ -855,12 +869,21 @@ function showNbConfirm(fileName: string, text: string, preview: Extract<CsvPrevi
     h(
       'div',
       { class: 'screen', testid: 'zt-import-confirm-screen' },
-      bar(`Update ${plural(changed.length, 'person', 'people')}?`, () => showNbPreview(fileName, text, preview, fields)),
+      bar(`Import ${plural(changed.length, 'change', 'changes')}?`, () => showNbPreview(fileName, text, preview, fields)),
       list,
       error,
       h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'button', testid: 'zt-import-keep', onclick: () => void showMain() }, 'Keep my list as it is'), confirm),
     ),
   );
+}
+
+/** Each new person as a change block: no username yet, and every ticked field that has a value. */
+function newMatches(plan: NbPlan, fields: DetailField[]): { username: string; name: string; changes: NbPlan['matched'][number]['changes'] }[] {
+  return plan.newPeople.map((p) => ({
+    username: `New · ${p.email}`,
+    name: fields.includes('name') ? p.values.name : '',
+    changes: fields.filter((f) => p.values[f] !== '').map((f) => ({ field: f, from: '', to: p.values[f] })),
+  }));
 }
 
 function changedMatches(plan: NbPlan, fields: DetailField[]): { username: string; name: string; changes: NbPlan['matched'][number]['changes'] }[] {
@@ -871,12 +894,10 @@ function changedMatches(plan: NbPlan, fields: DetailField[]): { username: string
 
 function showResult(result: ImportResult): void {
   const nb = result.kind === 'nationbuilder';
-  const title = nb ? `${plural(result.updated, 'person', 'people')} updated` : `${plural(result.added + result.updated, 'person', 'people')} imported`;
+  const title = nb && result.added === 0 ? `${plural(result.updated, 'person', 'people')} updated` : `${plural(result.added + result.updated, 'person', 'people')} imported`;
   const tile = (value: number, label: string, colour?: string) =>
     h('div', { class: 'st', testid: `zt-result-${label.toLowerCase()}` }, h('b', colour ? { style: `color:${colour}` } : {}, String(value)), h('span', {}, label));
-  const tiles = nb
-    ? [tile(result.updated, 'Updated', '#0F766E'), tile(result.unchanged, 'Unchanged'), tile(result.skipped.length, 'Skipped', '#B42318')]
-    : [tile(result.added, 'Added', '#0F766E'), tile(result.updated, 'Updated', '#0F766E'), tile(result.unchanged, 'Unchanged'), tile(result.skipped.length, 'Skipped', '#B42318')];
+  const tiles = [tile(result.added, 'Added', '#0F766E'), tile(result.updated, 'Updated', '#0F766E'), tile(result.unchanged, 'Unchanged'), tile(result.skipped.length, 'Skipped', '#B42318')];
   show(
     h(
       'div',

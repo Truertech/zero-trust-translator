@@ -434,3 +434,29 @@ test.describe('send batch', () => {
     await popup.close();
   });
 });
+
+test.describe('NationBuilder import', () => {
+  test('adds a person whose email is not in the list, with no username, and the admin then types the username', async ({ context, extensionId }) => {
+    const popup = await setUpWithPeople(context, extensionId);
+    const csv = ['name,address,postcode,area,email,phone,joinDate', 'Nina New,1 New St,NN1 1NN,North,nina@example.org,07700 900007,2020-01-01'].join('\n');
+
+    await popup.getByTestId('zt-import').click();
+    await popup.getByTestId('zt-import-file').setInputFiles({ name: 'nationbuilder.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
+    await expect(popup.getByTestId('zt-import-count-new-people-no-username-yet')).toContainText('1');
+    await expect(popup.getByTestId('zt-import-new-note')).toContainText('1 email is not in your list');
+    await popup.getByTestId('zt-import-review').click();
+    await expect(popup.getByTestId('zt-import-change')).toContainText('Nina New');
+    await popup.getByTestId('zt-import-confirm').click();
+    await expect(popup.getByTestId('zt-result-added')).toContainText('1');
+    await popup.getByTestId('zt-import-done').click();
+
+    const added = popup.getByTestId('zt-person').filter({ hasText: 'Nina New' });
+    await expect(added).toHaveAttribute('data-username', /^ref-[a-z0-9]{8}$/);
+    await added.click();
+    await expect(popup.getByTestId('zt-person-username')).toHaveValue('');
+    await popup.getByTestId('zt-person-username').fill('Macc9');
+    await popup.getByTestId('zt-person-save').click();
+
+    await expect(popup.getByTestId('zt-person').filter({ hasText: 'Nina New' })).toHaveAttribute('data-username', 'Macc9');
+  });
+});
