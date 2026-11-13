@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Zero Trust Translator",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Shows real names over Zero Trust usernames in the members platform, read from a list kept on this computer only.",
   "permissions": ["storage", "idle"],
   "background": { "service_worker": "background.js" },
