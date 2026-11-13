@@ -68,9 +68,9 @@ Open an issue in this repository:
 For a problem that should not be public before a fix ships (a way for the
 page to read the name list, a way to open the list without an unlock method,
 a way for one computer's list to reach another, or anything that could add a
-network path to the extension) email `paulmorrishill@gmail.com` with
-"zero-trust-translator security" in the subject, instead of opening a public
-issue.
+network path to the extension) report it privately through the repository's
+Security tab (<https://github.com/Truertech/zero-trust-translator/security/advisories/new>),
+instead of opening a public issue.
 
 ## Supported versions
 
