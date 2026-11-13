@@ -1,4 +1,4 @@
-/** The password fields, strength bar and checks of board 14, used by the popup setup and by board 18. */
+/** The password fields, strength bar and checks, used by the popup setup and by the Security page. */
 import { STRENGTH_LABELS, checkPassword, passwordAccepted, passwordStrength } from './password';
 import { h, svg } from './ui';
 

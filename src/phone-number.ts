@@ -1,7 +1,6 @@
 /**
- * UK mobile numbers for SMS (#3919). Mirrors
- * `paulmorrishill/RestoreMemberEngagement`'s `shared/sms/phone-number.ts`
- * line for line: the walled Lambda (#3920) must see the same E.164 form the
+ * UK mobile numbers for SMS. Mirrors the web
+ * app's phone number rules line for line: the walled Lambda must see the same E.164 form the
  * main app stores, so one opt-out list key works for both. The two repos
  * cannot share TypeScript source, so this file is a copy, not an import.
  *

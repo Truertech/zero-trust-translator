@@ -1,5 +1,5 @@
 /**
- * `normaliseUkMobile` (#3919) decides which people go into a send batch and
+ * `normaliseUkMobile` decides which people go into a send batch and
  * which count as having a valid mobile in `zt:listCodes`. Each prefix form
  * and each refusal has its own case.
  */

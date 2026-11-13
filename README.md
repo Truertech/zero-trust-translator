@@ -1,7 +1,6 @@
 # Zero Trust Translator
 
-A Chrome extension for branch admins of a Restore Member Engagement Zero
-Trust branch (`Truertech/RestoreMemberEngagement`, issue #3785). In Zero
+A Chrome extension for branch admins of a Zero Trust branch. In Zero
 Trust mode the web app shows a username or an anonymised reference instead
 of a real name — for example `Macc3`. This extension shows the real name
 instead, read from a list kept on the admin's own computer, and nowhere
@@ -15,7 +14,7 @@ else.
   the page adds after it has loaded. The name, a shield and a hover box with
   the username sit in a closed shadow root, and a badge at the top right
   says how many names the page shows, or that the list is locked.
-- The list is encrypted (issue #3797). `chrome.storage.local` holds only
+- The list is encrypted. `chrome.storage.local` holds only
   ciphertext: AES-256-GCM with a new IV on every write. The data key is
   wrapped once for each way the admin unlocks the list: Windows Hello or a
   security key (WebAuthn with the PRF extension), a password (PBKDF2-SHA-256,
@@ -30,18 +29,18 @@ else.
 - The extension's only permissions are `storage` and `idle`. It has no
   `host_permissions`, no network call, no remote font or image, no analytics
   and no `chrome.storage.sync`.
-- The popup imports `people.csv` (the #3785 wipe download), a NationBuilder
+- The popup imports `people.csv` (the wipe download), a NationBuilder
   Export CSV (matched to usernames by email), an encrypted `.ztbackup` file,
   or any CSV with a `username` or `reference` column. It adds, edits,
   deletes and searches people, and exports an encrypted backup only.
 - It does not change what the web app sends or stores.
 
-## Sending an SMS or an event invite (#3919)
+## Sending an SMS or an event invite
 
 A Zero Trust branch cannot show a member's phone number or name, so it
 cannot send the member a text message itself. The web app asks the
 Translator for an encrypted batch instead, and carries that batch to the
-walled Lambda (`Truertech/RestoreMemberEngagement`, #3920) — the Translator
+walled Lambda — the Translator
 never calls a server itself.
 
 - `zt:listCodes` answers with one row per person on the list: a `ref-`
@@ -89,7 +88,7 @@ never calls a server itself.
 
 The Translator will wrap a batch's key only for an origin it has a public
 key pinned for. `src/walled-keys.ts` holds the production and staging
-public keys once #3920 publishes them; an unpinned origin (including any
+public keys once they are published; an unpinned origin (including any
 origin not named there) gets `{ refused: 'unknown-origin' }`. The
 Translator never takes a key from the page, and no message can set or
 replace a pinned key — the only way a pinned key changes is a new release

@@ -79,10 +79,6 @@ export const COMMON_PASSWORDS: ReadonlySet<string> = new Set([
   'winter2026!!',
   'spring2026!!',
   'autumn2026!!',
-  'restorebritain',
-  'restorebritain1',
-  'restorebritain123',
-  'restorebritain2026',
   'zerotrust1234',
   'zerotrusttranslator',
 ]);

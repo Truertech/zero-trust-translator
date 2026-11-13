@@ -1,6 +1,6 @@
 /**
- * `zt:listCodes` and `zt:encryptForSend` (#3919): the codes table (board 1)
- * and the Allow window (board 6/11). `tests/e2e/translator.spec.ts` drives
+ * `zt:listCodes` and `zt:encryptForSend`: the codes table
+ * and the Allow window. `tests/e2e/translator.spec.ts` drives
  * the real Allow window; this file is the service worker logic underneath
  * it, with a fake `chrome.windows` standing in for the real one.
  */
@@ -19,7 +19,7 @@ const PAGE_ORIGIN = 'https://app.example.org';
 
 /**
  * A real RSA keypair stands in for the walled Lambda's pinned key
- * (#3920 publishes the real one; `walled-keys.ts` pins none until then).
+ * (the real one is not published yet; `walled-keys.ts` pins none until then).
  * The private half lets the `zt:encryptForSend` tests decrypt what they
  * get back, the same as the walled Lambda would.
  */
@@ -272,7 +272,7 @@ describe('zt:encryptForSend', () => {
   });
 });
 
-describe('codes follow the answers on #3919', () => {
+describe('codes follow the agreed rules', () => {
   let w: World;
 
   beforeEach(async () => {
@@ -328,7 +328,7 @@ describe('codes follow the answers on #3919', () => {
   });
 });
 
-describe('zt:encryptForSend follows the answers on #3919', () => {
+describe('zt:encryptForSend follows the agreed rules', () => {
   let w: World;
 
   beforeEach(async () => {
@@ -360,7 +360,7 @@ describe('zt:encryptForSend follows the answers on #3919', () => {
   });
 
   it('sends the first name of a person saved before the name split, and saves the split', async () => {
-    // A list sealed before #3919: no `firstName`, no `lastName`, no `code`.
+    // A list sealed before codes existed: no `firstName`, no `lastName`, no `code`.
     const local = w.chrome.local.data as Record<string, any>;
     const rawDataKey = fromBase64((w.chrome.session.data as Record<string, any>)[UNLOCKED_KEY].dataKey);
     const saved = await openList(rawDataKey, local[VAULT_KEY].data);
@@ -412,7 +412,7 @@ describe('zt:encryptForSend follows the answers on #3919', () => {
   });
 });
 
-describe('zt:encryptForSend reserves the Allow slot at once (#3919)', () => {
+describe('zt:encryptForSend reserves the Allow slot at once', () => {
   let w: World;
 
   beforeEach(async () => {

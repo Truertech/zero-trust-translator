@@ -1,5 +1,5 @@
 /**
- * The password rules of board 14 (#3797): at least 12 characters, and not
+ * The password rules: at least 12 characters, and not
  * a common password. The strength bar is a guide for the admin only; the
  * two rules are what the service worker enforces.
  */

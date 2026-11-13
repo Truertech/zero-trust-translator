@@ -1,5 +1,5 @@
 /**
- * The service worker (#3797): setup, lock and unlock, the password lockout,
+ * The service worker: setup, lock and unlock, the password lockout,
  * the 5-minute check, the list, import and backup, the settings, the
  * content script lookup and the ceremony port. Every request goes through
  * `handle`, the same entry point Chrome's `runtime.onMessage` calls.
@@ -317,9 +317,9 @@ describe('setup', () => {
         address: '',
         postcode: '',
         kind: '',
-        // `people()` mints a code for every code-less record on this read (#3919).
+        // `people()` mints a code for every code-less record on this read.
         code: expect.stringMatching(/^ref-[a-z0-9]{8}$/),
-        // The v0.1.0 name is split for the send batch (#3919).
+        // The v0.1.0 name is split for the send batch.
         firstName: 'Jane',
         lastName: 'Example',
       },
@@ -768,7 +768,7 @@ describe('the list', () => {
       address: '',
       postcode: '',
       kind: '',
-      // `people()` mints a code for every code-less record on this read (#3919).
+      // `people()` mints a code for every code-less record on this read.
       code: expect.stringMatching(/^ref-[a-z0-9]{8}$/),
       firstName: '',
       lastName: '',

@@ -1,5 +1,5 @@
 /**
- * The toolbar popup: boards 1-10 and 13-17 of #3797. It holds no key and no
+ * The toolbar popup. It holds no key and no
  * list of its own: every read and write is a message to the service worker
  * (`background.ts`), which holds the data key while the list is unlocked.
  */
@@ -97,7 +97,7 @@ function lockReasonText(): string {
   }
 }
 
-// ---------------------------------------------------------------- first start (boards 13-15)
+// ---------------------------------------------------------------- first start
 
 async function showSetup(): Promise<void> {
   const hello = await platformAuthenticatorAvailable();
@@ -168,7 +168,7 @@ function showSetupPassword(): void {
   );
 }
 
-/** Board 15: the code is shown once. A new visit to this screen makes a new code. */
+/** The recovery code is shown once. A new visit to this screen makes a new code. */
 async function showRecovery(): Promise<void> {
   const { code } = await call<{ code: string }>({ type: 'setupMakeRecovery' });
   const groups = recoveryCodeGroups(code);
@@ -236,7 +236,7 @@ async function showRecovery(): Promise<void> {
   );
 }
 
-// ---------------------------------------------------------------- locked (boards 16 and 17)
+// ---------------------------------------------------------------- locked
 
 function unlockButtons(op: 'unlock' | 'check', labels: { hello: string; key: string; password: string }, testids: { hello: string; key: string; password: string }, onPassword: () => void, onDone: () => Promise<void>, error: HTMLElement): HTMLElement[] {
   const buttons: HTMLElement[] = [];
@@ -302,7 +302,7 @@ interface SecretScreen {
   footer?: HTMLElement | undefined;
 }
 
-/** Board 17, for a password or a recovery code: unlock, a check before a guarded action, or a backup import. */
+/** The check, for a password or a recovery code: unlock, a check before a guarded action, or a backup import. */
 function showSecret(screen: SecretScreen): void {
   const isPassword = screen.kind === 'password';
   const input = h('input', {
@@ -417,7 +417,7 @@ async function enterUnlocked(): Promise<void> {
   await showMain();
 }
 
-// ---------------------------------------------------------------- the list (boards 1-4)
+// ---------------------------------------------------------------- the list
 
 async function loadPeople(): Promise<void> {
   people = (await call<{ people: PersonRecord[] }>({ type: 'getPeople' })).people;
@@ -675,7 +675,7 @@ function showAdd(): void {
   );
 }
 
-// ---------------------------------------------------------------- import (boards 5-8)
+// ---------------------------------------------------------------- import
 
 function showImportChoose(message = ''): void {
   const error = h('p', { class: 'err', testid: 'zt-import-error', role: 'alert', style: 'margin:0' }, message);
@@ -995,7 +995,7 @@ function showBackupSecret(fileName: string, text: string, backup: Backup): void 
   );
 }
 
-// ---------------------------------------------------------------- export (boards 9 and 10)
+// ---------------------------------------------------------------- export
 
 async function startExport(): Promise<void> {
   await refreshState();
@@ -1109,7 +1109,7 @@ function showExport(): void {
 
 function route(): void {
   if (state.phase === 'setup') {
-    // A passkey made in the unlock tab, after the popup closed, goes on to board 15.
+    // A passkey made in the unlock tab, after the popup closed, goes on to the recovery code screen.
     if (state.methods.some((m) => m.type !== 'recovery')) {
       void showRecovery();
     } else {

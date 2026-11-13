@@ -1,6 +1,6 @@
 /**
- * A small CSV reader, written in this repository (issue #3786:
- * no CSV package is approved). Handles double-quoted fields, embedded
+ * A small CSV reader, written in this repository (no CSV
+ * package is approved). Handles double-quoted fields, embedded
  * commas and doubled quotes (`""` inside a quoted field means one `"`).
  * Both `\n` and `\r\n` line endings are accepted.
  */
@@ -92,10 +92,10 @@ export function idColumnIndex(header: string[]): number {
 }
 
 /**
- * Reads the username-keyed formats: the `people.csv` wipe download from
- * #3785 (`username, kind, email, first name, last name, phone, address,
+ * Reads the username-keyed formats: the `people.csv` wipe download
+ * (`username, kind, email, first name, last name, phone, address,
  * postcode`), or any CSV with a `username`/`reference` column and a `name`
- * column, or `first name` and `last name` (#3786).
+ * column, or `first name` and `last name`.
  *
  * A row needs a username, and a name or an email: a person with an email
  * and no name yet gets the name from the next NationBuilder import.

@@ -1,11 +1,11 @@
-// Fails the build if the bundle can reach the network (issue #3786). Run as
+// Fails the build if the bundle can reach the network. Run as
 // `node scripts/check-no-network.mjs <dir>`. Scans every `.js` file under
 // `<dir>` for the network APIs and for a remote URL: the content.js and
 // popup.js bundles, which are the only files this extension executes.
 // `manifest.json` (whose `matches` field names the app's own origins by
 // design) is read, not run, so it is not scanned.
 //
-// #3797: the `.css` and `.html` pages are scanned for a remote URL too, so
+// the `.css` and `.html` pages are scanned for a remote URL too, so
 // no remote font, image, stylesheet or script gets in. The one remote
 // address a page may hold is the `href` of an `<a>` link (the source and
 // release links), which the browser follows only when the admin clicks it.

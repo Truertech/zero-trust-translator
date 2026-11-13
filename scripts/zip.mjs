@@ -1,4 +1,4 @@
-// A deterministic ZIP writer, written in this repository (issue #3786: the
+// A deterministic ZIP writer, written in this repository (the
 // build must be byte-for-byte reproducible, which rules out a compression
 // codec whose output can differ between zlib versions). Every entry is
 // stored uncompressed (method 0), so the only bytes in the archive are the

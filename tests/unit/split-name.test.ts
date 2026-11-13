@@ -1,5 +1,5 @@
 /**
- * The first-name and last-name split of #3919 (`types.ts`): an import with no
+ * The first-name and last-name split (`types.ts`): an import with no
  * first and last name columns, and a person saved before the split, take the
  * text before the first space as the first name.
  */

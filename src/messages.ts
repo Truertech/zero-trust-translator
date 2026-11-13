@@ -1,6 +1,6 @@
 /**
  * The runtime messages between the extension pages, the content script and
- * the service worker (#3797). Only the service worker holds the data key;
+ * the service worker. Only the service worker holds the data key;
  * every page asks it by message.
  */
 import type { CsvPreview, ImportResult } from './import';
@@ -69,7 +69,7 @@ export interface PasskeyMessage {
 }
 
 /**
- * The longest operation wording a page may give `zt:encryptForSend` (#3919).
+ * The longest operation wording a page may give `zt:encryptForSend`.
  * The Translator is a generic encryption step: the page that asks names its
  * own operation, such as "Send SMS messages", and the Allow window shows it.
  */
@@ -147,7 +147,7 @@ export interface NamesResponse {
   names: Record<string, string>;
 }
 
-/** One row of board 1's codes table: no PII beyond whether the mobile is valid. */
+/** One row of the codes table: no PII beyond whether the mobile is valid. */
 export interface CodeView {
   code: string;
   username: string;
@@ -161,7 +161,7 @@ export interface CodeView {
  */
 export type ListCodesResult = { codes: CodeView[] } | { refused: 'locked' };
 
-/** One row of the batch the walled Lambda (#3920) decrypts. */
+/** One row of the batch the walled Lambda decrypts. */
 export interface SendRow {
   code: string;
   phone: string;
@@ -192,7 +192,7 @@ export interface SendBatch {
  */
 export type EncryptForSendResult = { batch: SendBatch } | { refused: 'denied' | 'locked' | 'unknown-origin' | 'busy' | 'changed' };
 
-/** What the Allow window (board 6/11) shows, read by `zt:getAllowRequest`. */
+/** What the Allow window shows, read by `zt:getAllowRequest`. */
 export interface AllowRequestView {
   operation: string;
   peopleCount: number;

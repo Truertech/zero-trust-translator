@@ -1,6 +1,6 @@
-/* Boards 1-10 and 13-17 of #3797 (_Docs/mockups/zero-trust-translator/). System fonts only. */
+/* The popup. System fonts only. */
 html, body { margin: 0; }
-/* Chrome gives extension pages font-size: 75%. The boards render at the 16px default. */
+/* Chrome gives extension pages font-size: 75%. The popup renders at the 16px default. */
 body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 16px; color: #16181D; }
 a { color: #0F766E; }
 a:hover { color: #0B4F49; }
@@ -39,7 +39,7 @@ a:hover { color: #0B4F49; }
 .actions { padding: 12px 16px; border-top: 1px solid #E6E4DE; display: flex; gap: 8px; justify-content: flex-end; background: #fff; }
 .body { flex: 1; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
 
-/* Board 1 */
+/* The list */
 .tools { display: flex; gap: 8px; padding: 12px 16px; }
 .search { flex: 1; display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px; border: 1px solid #D5D2CA; border-radius: 8px; background: #fff; box-sizing: border-box; }
 .search input { flex: 1; border: 0; outline: 0; font: inherit; font-size: 13px; background: transparent; min-width: 0; }
@@ -56,7 +56,7 @@ a:hover { color: #0B4F49; }
 .kind { font-size: 11px; color: #57606A; background: #F2F1EC; border-radius: 999px; padding: 2px 8px; flex: none; }
 .nomatch { padding: 32px 16px; text-align: center; font-size: 13px; color: #57606A; }
 
-/* Board 2 */
+/* Search */
 .empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 32px; text-align: center; gap: 12px; }
 .empty .tile { width: 56px; height: 56px; border-radius: 16px; background: #fff; border: 1px solid #E6E4DE; display: flex; align-items: center; justify-content: center; color: #0F766E; }
 .empty .h { font-size: 16px; font-weight: 600; }
@@ -64,7 +64,7 @@ a:hover { color: #0B4F49; }
 .empty .go { display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 8px; }
 .empty .go .btn { height: 40px; }
 
-/* Board 3 */
+/* Empty list */
 .hero { margin: 14px 16px 4px; padding: 14px; border-radius: 12px; background: #0F766E; color: #fff; display: flex; gap: 12px; align-items: center; }
 .hero .h { font-size: 15px; font-weight: 600; }
 .hero .p { font-size: 12px; opacity: .9; margin-top: 2px; }
@@ -78,11 +78,11 @@ a:hover { color: #0B4F49; }
 .warnbar .t { flex: 1; font-size: 12px; color: #6B3A00; }
 .warnbar .btn { height: 32px; }
 
-/* Board 4 and Add person */
+/* Edit and Add person */
 .f { display: flex; flex-direction: column; gap: 6px; }
 .f label { font-size: 12px; font-weight: 600; color: #30353C; }
 .f input { font: inherit; font-size: 14px; height: 38px; padding: 0 10px; border: 1px solid #D5D2CA; border-radius: 8px; background: #fff; box-sizing: border-box; width: 100%; }
-/* Board 17 focus style, used on every focused field (operator answer, 2026-11-06). */
+/* Focus style, used on every focused field. */
 .f input:focus { outline: none; border: 1.5px solid #0F766E; box-shadow: 0 0 0 3px #CDE6E1; }
 .f input[aria-invalid="true"] { border-color: #B42318; }
 .ro { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding: 8px 0; border-bottom: 1px solid #EFEDE8; }
@@ -92,7 +92,7 @@ a:hover { color: #0B4F49; }
 .note.ok { background: #E6F2EF; color: #0B4F49; }
 .note.warn { background: #FFF8EB; color: #6B3A00; }
 
-/* Board 5 */
+/* Import */
 .drop { border: 1.5px dashed #9FC9C2; border-radius: 12px; background: #F4FAF8; padding: 24px 16px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; color: #0F766E; }
 .drop.over { background: #E6F2EF; }
 .drop .h { font-size: 14px; font-weight: 600; color: #16181D; }
@@ -105,7 +105,7 @@ a:hover { color: #0B4F49; }
 .fmt .tag { flex: none; font-size: 12px; font-weight: 600; color: #57606A; background: #E6F2EF; border-radius: 6px; padding: 3px 6px; margin-top: 1px; }
 .fmt .tag.plain { background: #F2F1EC; color: #454B54; }
 
-/* Board 6 */
+/* Import format */
 .filebox { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid #E6E4DE; border-radius: 10px; color: #0F766E; }
 .filebox .nm { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #16181D; }
 .filebox .meta { font-size: 12px; color: #57606A; }
@@ -117,7 +117,7 @@ a:hover { color: #0B4F49; }
 .fields { display: flex; flex-wrap: wrap; gap: 6px; }
 .fields label { display: flex; align-items: center; gap: 6px; font-size: 12px; border: 1px solid #D5D2CA; border-radius: 999px; padding: 4px 10px; }
 
-/* Board 7 */
+/* Import preview */
 .ch { padding: 10px 0; border-bottom: 1px solid #EFEDE8; }
 .ch .top { display: flex; justify-content: space-between; }
 .ch .top b { font-size: 13px; }
@@ -128,7 +128,7 @@ a:hover { color: #0B4F49; }
 .new { color: #0B4F49; font-weight: 500; }
 .more { padding: 10px 0; font-size: 12px; color: #57606A; }
 
-/* Board 8 */
+/* Import result */
 .done { display: flex; align-items: center; gap: 10px; color: #0B4F49; }
 .done .c { width: 32px; height: 32px; border-radius: 50%; background: #E6F2EF; display: flex; align-items: center; justify-content: center; }
 .done .t { font-size: 14px; font-weight: 600; }
@@ -140,7 +140,7 @@ a:hover { color: #0B4F49; }
 .sk .n { width: 48px; flex: none; color: #57606A; }
 .sk .why { margin-left: auto; color: #57606A; }
 
-/* Boards 9, 16 and 17 */
+/* Checks and locked screens */
 .centre { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 36px 24px 20px; gap: 10px; text-align: center; }
 .centre .disc { width: 64px; height: 64px; border-radius: 50%; background: #fff; border: 1px solid #E6E4DE; display: flex; align-items: center; justify-content: center; color: #0F766E; }
 .centre .disc.lg { width: 72px; height: 72px; }
@@ -156,13 +156,13 @@ a:hover { color: #0B4F49; }
 .pwbox .icon-btn { width: 36px; height: 36px; color: #57606A; }
 .pwd .go { display: flex; flex-direction: column; gap: 8px; margin-top: auto; }
 
-/* Board 10 */
+/* Export */
 .opt { display: flex; gap: 10px; align-items: flex-start; padding: 12px; border: 1px solid #0F766E; border-radius: 10px; background: #F4FAF8; box-shadow: 0 0 0 1px #0F766E inset; }
 .opt b { display: block; font-size: 13px; }
 .opt span { font-size: 12px; color: #57606A; }
 .fname { font-size: 12px; padding: 9px 10px; border: 1px solid #E6E4DE; border-radius: 8px; background: #F7F6F2; }
 
-/* Boards 13-15 */
+/* First start */
 .setup { flex: 1; padding: 22px 16px 16px; display: flex; flex-direction: column; gap: 12px; }
 .setup .intro { text-align: center; display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
 .setup .intro .h { font-size: 18px; font-weight: 600; }
@@ -194,7 +194,7 @@ a:hover { color: #0B4F49; }
   .codes { position: absolute; left: 0; top: 0; }
 }
 
-/* The Allow window (allow.html), boards 6 and 11 of `_Docs/mockups/zero-trust-sms/` (#3919). */
+/* The Allow window (allow.html). */
 .allow .hd { gap: 8px; padding: 12px; }
 .allow-lead { margin: 0; font-size: 16px; font-weight: 600; line-height: 1.4; }
 .allow-op { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1.5px solid #0F766E; border-radius: 10px; background: #E6F4F1; color: #0B5A54; font-size: 15px; font-weight: 600; }

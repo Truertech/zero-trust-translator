@@ -1,6 +1,6 @@
 /**
  * Passkey registration and assertion with the WebAuthn `prf` extension
- * (#3797). Runs in an extension page (the popup, the options page or the
+ *. Runs in an extension page (the popup, the options page or the
  * unlock tab), never in the service worker: `navigator.credentials` is a
  * window API.
  *

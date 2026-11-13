@@ -1,11 +1,11 @@
-// The deterministic build (issue #3786).
+// The deterministic build.
 //
 //   node scripts/build.mjs          the release build: the matches in
 //                                   manifest.json only, no localhost
 //   node scripts/build.mjs --dev    adds http://localhost/* to the content
 //                                   script matches, for the Playwright
 //                                   tests in this repository and in
-//                                   Truertech/RestoreMemberEngagement.
+//                                   the web app.
 //                                   Never upload this build.
 //
 // `OUT_DIR` (default `dist`) chooses the output folder and the zip name;
@@ -26,7 +26,7 @@ const outDirName = process.env['OUT_DIR'] ?? (isDev ? 'dist-dev' : 'dist');
 const outDir = join(ROOT, outDirName);
 const sourceDateEpoch = Number(process.env['SOURCE_DATE_EPOCH'] ?? '0');
 
-// The dev-only pinned walled key (#3919, `walled-keys.ts`), supplied by the
+// The dev-only pinned walled key (`walled-keys.ts`), supplied by the
 // RME e2e helper that drives this build. Absent for every other build, dev
 // or release: those bundles pin no walled key at all.
 const walledDevOrigin = process.env['ZT_WALLED_DEV_ORIGIN'];
@@ -46,7 +46,7 @@ function bundle(entry, outfile) {
     target: 'chrome120',
     platform: 'browser',
     legalComments: 'none',
-    // #3786: never build a bundle that can reach the network. A dropped
+    // never build a bundle that can reach the network. A dropped
     // `fetch`/`XMLHttpRequest` import here would be dead code the bundler
     // keeps; `scripts/check-no-network.mjs` is the real gate, this is belt
     // and braces.

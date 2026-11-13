@@ -1,8 +1,8 @@
 /**
- * The content script. Finds every `data-zt-id` marker (#3785's marker
+ * The content script. Finds every `data-zt-id` marker (the marker
  * contract) and draws the real name over it, on this computer only.
  *
- * Since #3797 the list is encrypted and only the service worker can open
+ * The list is encrypted and only the service worker can open
  * it. This script sends the marker ids it finds (`lookupNames`) and gets
  * back the names of those ids and nothing more: never the list, never the
  * data key. While the list is locked the answer has no names, and every
@@ -44,7 +44,7 @@ const SHIELD_CHECK_SVG =
 const LOCK_SVG =
   '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
 
-// Board 11: the shield, the dotted underline and the dark hover box.
+// The shield, the dotted underline and the dark hover box.
 const MARKER_STYLE = `
 #w { position: relative; display: inline; }
 #zt-name { display: none; align-items: center; gap: 5px; font-weight: 500; border-bottom: 1.5px dotted #0F766E; padding-bottom: 1px; }
@@ -58,7 +58,7 @@ const MARKER_STYLE = `
 #w.on:hover #tip { display: block; }
 `;
 
-// Boards 11 and 12: the badge, fixed at the top right of the page.
+// The badge, fixed at the top right of the page.
 const BADGE_STYLE = `
 #b { position: fixed; top: 12px; right: 12px; z-index: 2147483647; display: none; align-items: center; gap: 8px; font: 12px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; border-radius: 999px; padding: 5px 12px; box-shadow: 0 1px 3px rgba(22,24,29,.12); }
 #b.unlocked { display: inline-flex; color: #0B4F49; background: #E6F2EF; border: 1px solid #BFDCD6; }
@@ -231,12 +231,12 @@ function touchesMarkers(mutations: MutationRecord[]): boolean {
 }
 
 /**
- * `zt:listCodes` and `zt:encryptForSend` (#3919): the page cannot call
+ * `zt:listCodes` and `zt:encryptForSend`: the page cannot call
  * `chrome.runtime.sendMessage` itself (only an extension's own scripts can),
  * so it asks by `window.postMessage` and this script relays the one request
  * to the service worker and the one answer back. `origin` is added here,
  * from `location.origin`, never from the page's message: the page cannot
- * claim to be an origin it is not. See `_Docs/zero-trust-translator.md`.
+ * claim to be an origin it is not.
  */
 const PAGE_MESSAGE_SOURCE = 'zero-trust-translator-page';
 const EXTENSION_MESSAGE_SOURCE = 'zero-trust-translator-extension';

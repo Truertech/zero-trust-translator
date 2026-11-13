@@ -1,5 +1,5 @@
 /**
- * The Allow window (#3919, boards 6 and 11). It shows the page origin, the
+ * The Allow window . It shows the page origin, the
  * operation in the page's own words and the matched count, and never the
  * message: the Translator is a generic encryption step. It holds `ALLOW_PORT` open for as long as a
  * decision is pending, so the service worker is not evicted while it waits

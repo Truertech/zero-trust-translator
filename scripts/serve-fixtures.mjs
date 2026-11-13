@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = join(dirname(dirname(fileURLToPath(import.meta.url))), 'tests', 'fixtures');
 const PORT = Number(process.env['PORT'] ?? '4321');
 // A second origin, matched by the dev build's `http://localhost/*` content
-// script rule but never pinned with a walled key (#3919): the "an origin
+// script rule but never pinned with a walled key: the "an origin
 // with no pinned key refuses" test needs a real page the content script
 // runs on, not a URL the content script never sees at all.
 const SECOND_PORT = PORT + 1;

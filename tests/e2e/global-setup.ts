@@ -12,11 +12,11 @@ const PORT = Number(process.env['FIXTURE_PORT'] ?? '4321');
 export const WALLED_DEV_KEY_PATH = join(ROOT, 'test-results', 'walled-dev-key.json');
 
 /**
- * Mints a fresh RSA-OAEP keypair for this run only (#3919): the public half
+ * Mints a fresh RSA-OAEP keypair for this run only: the public half
  * is baked into the dev build as the pinned key for this fixture server's
  * origin, and the private half is written to `WALLED_DEV_KEY_PATH` so the
  * spec can decrypt a batch and prove the extension encrypted the right
- * thing. Never the production/staging key: those do not exist yet (#3920).
+ * thing. Never the production/staging key: those do not exist yet.
  */
 async function makeWalledDevKey(): Promise<{ origin: string; keyId: string; publicKeySpki: string; privateKeyPkcs8: string }> {
   const keyPair = await crypto.subtle.generateKey(

@@ -3,7 +3,7 @@
 // (https://playwright.dev/docs/chrome-extensions). The dev build's fixed
 // test-only `manifest.key` (`tests/fixtures/dev-extension-key.json`) gives
 // a fixed, known extension id. Each test gets its own profile folder, so a
-// test can close Chrome and open the same profile again (#3797).
+// test can close Chrome and open the same profile again.
 import { type BrowserContext, type Worker, test as base, chromium } from '@playwright/test';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';

@@ -1,5 +1,5 @@
 /**
- * The list operations (#3797). The list itself lives only inside the vault
+ * The list operations. The list itself lives only inside the vault
  * (`vault.ts`): the service worker opens it with the data key, runs one of
  * these pure functions on it, and seals the result again. Nothing here
  * touches storage.
@@ -59,7 +59,7 @@ export function addPerson(people: PersonRecord[], username: string, email: strin
   return [...people, { ...emptyPerson(trimmed), email: email.trim() }];
 }
 
-/** Changes the username of one person. The only edit the popup allows (board 4). */
+/** Changes the username of one person. The only edit the popup allows. */
 export function renameUser(people: PersonRecord[], from: string, to: string): PersonRecord[] {
   const trimmed = to.trim();
   if (trimmed.length === 0) {

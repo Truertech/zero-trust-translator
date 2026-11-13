@@ -1,5 +1,5 @@
 /**
- * The send-batch encryption (#3919). WebCrypto only: no crypto package.
+ * The send-batch encryption. WebCrypto only: no crypto package.
  *
  * On Allow, the plaintext batch holds a fresh 256-bit one-time token, the
  * current timestamp and the rows. A fresh random AES-256-GCM key encrypts

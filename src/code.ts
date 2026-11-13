@@ -1,10 +1,9 @@
 /**
- * The per-person code (#3919): a short id the walled SMS Lambda sees in
+ * The per-person code: a short id the walled SMS Lambda sees in
  * place of the username, so the Lambda never learns which branch member a
- * send batch names. Mirrors `newZeroTrustRef` in
- * `paulmorrishill/RestoreMemberEngagement`'s `polls-api`
- * (`zero-trust-people.ts`), so the admin app's `PersonName.tsx` draws a code
- * with the same shield it draws a `ref-` reference with.
+ * send batch names. Uses the same shape as the web app's
+ * `ref-` references, so the web app draws a code with the same shield it
+ * draws a `ref-` reference with.
  */
 import { emailKey, usernameKey, withSplitName, type PersonRecord } from './types';
 import { randomBytes } from './vault';
@@ -19,13 +18,13 @@ export function newCode(): string {
   return out;
 }
 
-/** The pattern `frontend/src/components/PersonName.tsx` draws with the shield. */
+/** The pattern the web app draws with the shield. */
 export function isRefCode(value: string): boolean {
   return /^ref-[a-z0-9]+$/.test(value);
 }
 
 /**
- * The email-to-code history (#3919, Q7 on the card): the code each email
+ * The email-to-code history: the code each email
  * last had, kept in the vault after the person is deleted, so that the
  * same person added again gets the same code back.
  */
@@ -33,7 +32,7 @@ export type CodeHistory = Record<string, string>;
 
 /**
  * The code a person with no code gets, in this order: a `ref-` username
- * (the polls-api wipe reference) is the code; else the code the history
+ * (the wipe reference) is the code; else the code the history
  * holds for the email; else a new code.
  */
 function firstCode(person: PersonRecord, history: CodeHistory): string {
@@ -71,7 +70,7 @@ export function ensureCoded(people: PersonRecord[], history: CodeHistory = {}): 
  *   other person gets a new code.
  * The clean-up changes codes only. It never removes a person and never
  * changes a phone number, so an opt-out (held by number in the walled
- * store, #3920) still applies to the person after a code change.
+ * store) still applies to the person after a code change.
  */
 export function resolveCodeConflicts(people: PersonRecord[], history: CodeHistory = {}): { people: PersonRecord[]; history: CodeHistory } {
   const fromUsername = people.map((p) => {

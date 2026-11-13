@@ -1,5 +1,5 @@
 /**
- * The encrypted list (#3797). WebCrypto only: no crypto package.
+ * The encrypted list. WebCrypto only: no crypto package.
  *
  * One random 256-bit AES-GCM DATA KEY encrypts the whole list, with a new
  * random 96-bit IV on every write. The data key is never stored in the
@@ -87,7 +87,7 @@ export interface Vault {
   version: 1;
   createdAt: string;
   data: Sealed;
-  /** The email-to-code history (#3919, `code.ts`), sealed under the data key. Absent until the first code is minted. */
+  /** The email-to-code history (`code.ts`), sealed under the data key. Absent until the first code is minted. */
   codeHistory?: Sealed;
   methods: UnlockMethod[];
 }

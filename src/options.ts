@@ -1,5 +1,5 @@
 /**
- * The options page: board 18 of #3797, "Security". Lists the unlock
+ * The options page, "Security". Lists the unlock
  * methods, the lock settings and the recovery code, and holds "Delete my
  * list". Every change to an unlock method, a new recovery code and the
  * delete need a check in the last 5 minutes; the service worker refuses
@@ -70,7 +70,7 @@ function guarded(row: string, action: () => void): void {
   openPanel(row, checkPanel(action));
 }
 
-/** Board 9 on this page: Windows Hello, a security key or the password, then the action. */
+/** The check on this page: Windows Hello, a security key or the password, then the action. */
 function checkPanel(then: () => void): HTMLElement {
   const error = h('p', { class: 'err', role: 'alert', style: 'margin:0', testid: 'zt-reauth-error' });
   const done = async (secret: SecretMessage): Promise<void> => {

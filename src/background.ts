@@ -1,5 +1,5 @@
 /**
- * The service worker (#3797). It is the only part of the extension that
+ * The service worker. It is the only part of the extension that
  * holds the data key, and it holds it in `chrome.storage.session` only:
  * memory that Chrome clears when it closes, readable by extension pages and
  * this worker (`TRUSTED_CONTEXTS`), never by a content script. A content
@@ -264,7 +264,7 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
   }
 
   /**
-   * Reads the list, giving a code (#3919) to any person who has none yet —
+   * Reads the list, giving a code to any person who has none yet —
    * every person made before this feature existed — and a first and last
    * name split from `name` to any person who has neither. `ensureCoded` is the one
    * path a fresh person and a legacy person both go through: the first read
@@ -277,7 +277,7 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
 
   /**
    * The list for an SMS operation: `people()`, then the code clean-up
-   * (`resolveCodeConflicts`, #3919), persisted when it changes a code.
+   * (`resolveCodeConflicts`), persisted when it changes a code.
    */
   async function smsPeople(rawDataKey: Bytes, current: Vault): Promise<PersonRecord[]> {
     return codedPeople(rawDataKey, current, (list, history) => {
@@ -386,7 +386,7 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
     }
   }
 
-  /** Writes when a passkey or the recovery code was last used, for board 18. */
+  /** Writes when a passkey or the recovery code was last used on the Security page. */
   async function markUsed(current: Vault, method: UnlockMethod): Promise<void> {
     if (method.type === 'password') {
       return;
@@ -722,7 +722,7 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
     }
     const wanted = new Set((Array.isArray(ids) ? ids : []).filter((id): id is string => typeof id === 'string').map(usernameKey));
     const names: Record<string, string> = {};
-    // A marker matches a person by the username, or by the code (#3919): a
+    // A marker matches a person by the username, or by the code: a
     // person with no username on the platform appears in the page
     // under the code the Translator minted for them.
     for (const person of await people(fromBase64(open.dataKey), current)) {
@@ -739,7 +739,7 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
   }
 
   /**
-   * ADR 0214's lock applies to a page-triggered request the same as to the
+   * The list lock applies to a page-triggered request the same as to the
    * popup: a locked (or not yet set up) list refuses rather than opening
    * anything sensitive. There is no popup open to show the lock screen in,
    * so this opens the extension's own page in a tab, where it renders that
@@ -750,7 +750,7 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
   }
 
   /**
-   * Board 1's codes table (#3919): the code, the username and whether the
+   * The codes table: the code, the username and whether the
    * phone is a valid UK mobile. No name, no phone, no address. Runs inside
    * `serialize()`: `smsPeople` can mint a code or clean up a conflict and
    * persist it, the same write a CSV import makes, so the read-modify-write
@@ -766,7 +766,7 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
       }
       const list = await smsPeople(fromBase64(open.dataKey), current);
       // A `ref-` username is a wipe reference, not a platform username
-      // (#3919): it is the code, and the username is reported empty.
+      //: it is the code, and the username is reported empty.
       return {
         codes: list.map((p) => ({
           code: p.code,
@@ -787,7 +787,7 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
   }
 
   /**
-   * One entry per open Allow window (board 6/11). In-memory only: if the
+   * One entry per open Allow window. In-memory only: if the
    * service worker is evicted while a window is open, the window's own
    * `zt:getAllowRequest`/`zt:resolveAllow` calls find no entry and fail with
    * `not-found`, which the window shows as an error — the same outcome as
@@ -801,7 +801,7 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
    * True from the moment a `zt:encryptForSend` passes the busy check until
    * its Allow window is answered or closed, or the request ends early. The
    * check and the reservation run in one synchronous step, so two requests
-   * that arrive together cannot both open a window (#3919).
+   * that arrive together cannot both open a window.
    */
   let allowReserved = false;
 
@@ -835,7 +835,7 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
    * as long as the window stays open, so it runs outside the queue.
    */
   async function startEncryptForSend(request: Extract<Request, { type: 'zt:encryptForSend' }>): Promise<EncryptForSendResult> {
-    // One Allow window at a time (#3919): a second request while
+    // One Allow window at a time: a second request while
     // one is open is refused, and the open window stays as it is.
     if (allowReserved) {
       return { refused: 'busy' };
@@ -881,7 +881,7 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
     // The window shows how many of `codes` the batch will hold, never the
     // page's own claim: a page cannot inflate the count the admin sees. A
     // code the list does not hold and a code with no valid UK mobile are
-    // both left out (#3919), the same as `encryptForSendOutcome`.
+    // both left out, the same as `encryptForSendOutcome`.
     const list = await smsPeople(fromBase64(open.dataKey), current);
     const byCode = new Map(list.map((p) => [p.code, p]));
     const matchedCount = codes.filter((code) => {
@@ -959,7 +959,7 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
   }
 
   /**
-   * Answers the Allow window itself (board 6/11), and settles the original
+   * Answers the Allow window itself, and settles the original
    * `zt:encryptForSend` caller's pending promise. `entry.resolve` always
    * runs, even when building the batch throws, so that promise never hangs.
    */
@@ -1041,7 +1041,7 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
     if (!fromExtensionPage(sender)) {
       return { ok: false, error: 'forbidden', message: MESSAGES.forbidden } satisfies Failure;
     }
-    // Only the Allow window (board 6/11) itself sends these.
+    // Only the Allow window itself sends these.
     if (request.type === 'zt:getAllowRequest') {
       try {
         return { ok: true, ...(await getAllowRequest(request.requestId)) };

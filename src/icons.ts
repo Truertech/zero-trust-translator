@@ -1,4 +1,4 @@
-/** The icons of the boards in `_Docs/mockups/zero-trust-translator/` of the platform repository, copied path for path. */
+/** The icons of the extension, as SVG paths. */
 export const ICON_PATHS = {
   shieldCheck: '<path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6l8-3z"/><path d="M9 12l2 2 4-4"/>',
   shield: '<path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6l8-3z"/>',

@@ -79,7 +79,7 @@ describe('parsePeopleCsv', () => {
     expect(parsePeopleCsv('name,username\nJane Example\n')).toEqual({ imported: [], skipped: [{ row: 2, reason: 'no username', label: 'Jane Example' }] });
   });
 
-  it('imports every column of the #3785 people.csv wipe download', () => {
+  it('imports every column of the people.csv wipe download', () => {
     const text = `${PEOPLE_HEADER}\nMacc1,member,jane@example.org,Jane,Example,07700 900000,1 High Street,AB1 2CD\n`;
 
     expect(parsePeopleCsv(text)).toEqual({
@@ -192,17 +192,17 @@ describe('parsePeopleCsv', () => {
     expect(() => parsePeopleRows([])).toThrow('The file has no "username" or "reference" column.');
   });
 
-  it('keeps the first and last name columns as they are, and does not split the name column (#3919)', () => {
+  it('keeps the first and last name columns as they are, and does not split the name column', () => {
     const { imported } = parsePeopleCsv('username,name,first name,last name\nu1,Jane A. Example,Jane A.,Example\n');
     expect(imported[0]).toMatchObject({ name: 'Jane A. Example', firstName: 'Jane A.', lastName: 'Example' });
   });
 
-  it('takes a last name column with no first name column as the last name only (#3919)', () => {
+  it('takes a last name column with no first name column as the last name only', () => {
     const { imported } = parsePeopleCsv('username,last name\nu1,Example\n');
     expect(imported[0]).toMatchObject({ name: 'Example', firstName: '', lastName: 'Example' });
   });
 
-  it('splits the name column when the first and last name cells are empty (#3919)', () => {
+  it('splits the name column when the first and last name cells are empty', () => {
     const { imported } = parsePeopleCsv('username,name,first name,last name\nu1,Jane Example,,\n');
     expect(imported[0]).toMatchObject({ firstName: 'Jane', lastName: 'Example' });
   });

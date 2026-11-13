@@ -1,14 +1,13 @@
 /**
- * The import preview and the update list (#3797).
+ * The import preview and the update list.
  *
  * Two kinds of CSV come in:
  *
- * - USERNAME-KEYED: `people.csv` from the #3785 wipe download, or any CSV
- *   with a `username`/`reference` column (#3786). A row with a new username
+ * - USERNAME-KEYED: `people.csv` from the wipe download, or any CSV
+ *   with a `username`/`reference` column. A row with a new username
  *   adds a person; a row with a username already in the list updates it.
  *   A cell with a value replaces what the list holds; an empty cell keeps it.
- * - NATIONBUILDER EXPORT (`tools/nationbuilder-export/` in
- *   `Truertech/RestoreMemberEngagement`): no username at all, so each row
+ * - NATIONBUILDER EXPORT: no username at all, so each row
  *   is matched to a person in the list by email, compared trimmed and
  *   lower-case. A matched row changes only the ticked fields.
  *
@@ -250,7 +249,7 @@ export function previewCsv(text: string, current: PersonRecord[]): CsvPreview {
   return { kind: 'people', format, label: FORMAT_LABELS[format], rowCount: rows.length - 1, ...parsed };
 }
 
-/** What the import wrote, for board 8. */
+/** What the import wrote, for the import result screen. */
 export interface ImportResult {
   kind: 'nationbuilder' | 'people' | 'backup';
   added: number;

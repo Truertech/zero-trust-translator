@@ -1,5 +1,5 @@
 /**
- * The code rules of #3919 (`code.ts`): which code a person gets first, the
+ * The code rules (`code.ts`): which code a person gets first, the
  * email-to-code history, and the clean-up before an SMS operation.
  * `randomBytes` is replaced, so each new code is known before it is minted.
  */

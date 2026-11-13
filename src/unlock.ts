@@ -1,5 +1,5 @@
 /**
- * The unlock tab (#3797). A Windows Hello or security key dialog closes the
+ * The unlock tab. A Windows Hello or security key dialog closes the
  * popup when the popup loses focus. The service worker then opens this tab
  * with the same request (`?op=unlock&kind=platform`), and the admin finishes
  * the dialog here, in a page that keeps focus.

@@ -96,7 +96,7 @@ export class FakeChrome {
   messageListeners: MessageListener[] = [];
   connectListeners: ((port: FakePort) => void)[] = [];
   idleListeners: ((state: string) => void)[] = [];
-  /** Every `windows.create` call (the Allow window, board 6/11). */
+  /** Every `windows.create` call (the Allow window). */
   readonly windowsCreated: { url: string; width: number; height: number }[] = [];
   readonly windowsRemoved: number[] = [];
   windowRemovedListeners: ((windowId: number) => void)[] = [];

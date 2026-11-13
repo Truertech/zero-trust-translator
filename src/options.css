@@ -1,4 +1,4 @@
-/* Board 18 of #3797 (the options page) and the unlock tab. Loaded after popup.css. */
+/* The options page and the unlock tab. Loaded after popup.css. */
 body { background: #F7F6F2; }
 .btn { white-space: nowrap; }
 .page { min-height: 100vh; padding: 32px 24px; box-sizing: border-box; }

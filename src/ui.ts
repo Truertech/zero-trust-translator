@@ -1,6 +1,6 @@
 /**
  * Small DOM helpers shared by the popup, the options page and the unlock
- * tab (#3797). Every text goes in with `textContent`; only the static icon
+ * tab. Every text goes in with `textContent`; only the static icon
  * markup of `icons.ts` goes in as HTML.
  */
 import { icon, type IconName } from './icons';
@@ -45,7 +45,7 @@ function append(el: Element, children: Child[]): void {
   }
 }
 
-/** A `<span>` that holds one icon of the boards. */
+/** A `<span>` that holds one icon. */
 export function svg(name: IconName, size = 16, strokeWidth = 2, stroke?: string): HTMLSpanElement {
   const span = document.createElement('span');
   span.className = 'i';
@@ -166,7 +166,7 @@ export async function passkeySecret(state: StateView, kind: PasskeyKind): Promis
   });
 }
 
-/** Makes a new passkey, with a name for board 18. */
+/** Makes a new passkey, with a name for the Security page. */
 export async function newPasskey(kind: PasskeyKind, name: string): Promise<RegisteredPasskey & { name: string }> {
   return exclusiveCeremony(async () => ({ ...(await registerPasskey(kind)), name }));
 }

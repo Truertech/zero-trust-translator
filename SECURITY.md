@@ -35,11 +35,11 @@ uploads the list or a key (see the "no network" checks in `README.md`).
 - If every unlock method and the recovery code are lost, the list cannot be
   opened. Nobody, including the maintainers, can recover it.
 
-## The send batch (#3919)
+## The send batch
 
 `zt:encryptForSend` (see `README.md`) lets the web app ask the Translator
 to encrypt a batch of phone numbers and first names for the walled Lambda
-(#3920), without the Translator ever holding a network permission or
+, without the Translator ever holding a network permission or
 calling a server itself.
 
 - The admin must press Allow in a window this extension opens; nothing is

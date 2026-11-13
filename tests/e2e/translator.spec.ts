@@ -17,7 +17,7 @@ async function openPopup(context: BrowserContext, extensionId: string): Promise<
   return popup;
 }
 
-/** Board 13 → 14 → 15: sets up the list with a password. Returns the recovery code. */
+/** First start: sets up the list with a password. Returns the recovery code. */
 async function setUpWithPassword(popup: Page): Promise<string> {
   await popup.getByTestId('zt-setup-password').click();
   await popup.getByTestId('zt-password-new').fill(PASSWORD);
@@ -229,7 +229,7 @@ test.describe('storage and network', () => {
   });
 });
 
-// ---- send batch for the walled Lambda (#3919) --------------------------------------
+// ---- send batch for the walled Lambda --------------------------------------
 
 interface WalledDevKey {
   origin: string;
@@ -297,7 +297,7 @@ function b64ToBytes(value: string): Uint8Array {
   return Uint8Array.from(Buffer.from(value, 'base64'));
 }
 
-/** Opens the batch with the dev walled private key, the same way the walled Lambda (#3920) would. */
+/** Opens the batch with the dev walled private key, the same way the walled Lambda would. */
 async function decryptBatch(batch: SendBatch): Promise<{ token: string; timestamp: string; rows: { code: string; phone: string; firstName: string }[] }> {
   const rawAesKey = await crypto.subtle.decrypt({ name: 'RSA-OAEP' }, walledPrivateKey, b64ToBytes(batch.wrappedKey));
   const aesKey = await crypto.subtle.importKey('raw', rawAesKey, { name: 'AES-GCM' }, false, ['decrypt']);
@@ -305,7 +305,7 @@ async function decryptBatch(batch: SendBatch): Promise<{ token: string; timestam
   return JSON.parse(new TextDecoder().decode(plaintext));
 }
 
-test.describe('send batch (#3919)', () => {
+test.describe('send batch', () => {
   test("Allow shows the page's operation wording and the matched count, and encrypts a decryptable batch", async ({ context, extensionId }) => {
     const popup = await setUpWithPeople(context, extensionId);
     const page = await context.newPage();
@@ -385,7 +385,7 @@ test.describe('send batch (#3919)', () => {
 
     expect(result).toEqual({ refused: 'locked' });
     // The locked refusal opens the extension's own unlock tab, not the
-    // Allow window (board 6/11): that tab is `popup.html`, not `allow.html`.
+    // Allow window: that tab is `popup.html`, not `allow.html`.
     expect(openedPage.url()).toContain('popup.html');
   });
 

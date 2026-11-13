@@ -43,7 +43,7 @@ describe('detectCsvFormat', () => {
     expect(detectCsvFormat(header.split(','))).toBe(format);
   });
 
-  it('gives each NationBuilder layout the label board 6 shows', () => {
+  it('gives each NationBuilder layout the label the import screen shows', () => {
     expect(FORMAT_LABELS['nb-member']).toBe('NationBuilder Export · member import format');
     expect(FORMAT_LABELS['nb-all']).toBe('NationBuilder Export · all columns');
   });

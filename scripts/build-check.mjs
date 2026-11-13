@@ -1,5 +1,5 @@
 // Builds the extension twice, in two clean directories, and fails if the
-// two zips do not hash the same (issue #3786: "The CI job builds the zip
+// two zips do not hash the same ("The CI job builds the zip
 // twice in clean directories and fails if the two SHA-256 hashes differ.").
 import { execFileSync } from 'node:child_process';
 import { readFileSync, rmSync } from 'node:fs';

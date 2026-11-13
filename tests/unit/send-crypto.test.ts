@@ -1,5 +1,5 @@
 /**
- * `encryptBatch` (#3919): the AES-256-GCM/RSA-OAEP-SHA-256 envelope around a
+ * `encryptBatch`: the AES-256-GCM/RSA-OAEP-SHA-256 envelope around a
  * send batch. No background/vault code here, only the crypto: a fresh RSA
  * keypair stands in for the walled Lambda's pinned key, so the test can
  * decrypt what the real Lambda would decrypt with its own private half.

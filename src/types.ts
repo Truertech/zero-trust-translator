@@ -1,4 +1,4 @@
-/** What a person is on the branch platform, as `people.csv` (#3785) writes it. Empty when the file did not say. */
+/** What a person is on the branch platform, as `people.csv` writes it. Empty when the file did not say. */
 export type PersonKind = 'user' | 'member' | 'respondent' | '';
 
 /**
@@ -7,7 +7,7 @@ export type PersonKind = 'user' | 'member' | 'respondent' | '';
  * Every text field is `''` when the list does not hold a value.
  *
  * `code` is the id the walled SMS Lambda sees in place of the username
- * (#3919, `code.ts`): every person gets one, minted once and kept for life.
+ * (`code.ts`): every person gets one, minted once and kept for life.
  * `firstName` and `lastName` are the split of `name` a send batch needs; an
  * import that changes `name` re-splits them.
  */
@@ -53,7 +53,7 @@ export function splitName(name: string): { firstName: string; lastName: string }
 
 /**
  * Gives a person with no first and no last name the split of `name`. A
- * record saved before #3919 has neither key, and a send batch needs the
+ * record saved before codes existed has neither key, and a send batch needs the
  * first name. A person that has either name keeps both as they are.
  */
 export function withSplitName(person: PersonRecord): PersonRecord {

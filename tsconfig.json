@@ -17,7 +17,7 @@
   // (plain Node, run directly, never type-checked) and `tests/**/*.ts`
   // (compiled on the fly by vitest/Playwright, not by `tsc`) would need
   // `@types/node` to type-check under `strict`, and that package is not on
-  // the approved dependency list for this repository (issue #3786). Both
+  // the approved dependency list for this repository. Both
   // run and fail loudly on their own if they are wrong; this config
   // protects only `src`.
   "include": ["src"]
