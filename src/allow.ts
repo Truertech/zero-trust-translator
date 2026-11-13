@@ -1,0 +1,83 @@
+/**
+ * The Allow window (#3919, boards 6 and 11). It shows the page origin, the
+ * operation in the page's own words and the matched count, and never the
+ * message: the Translator is a generic encryption step. It holds `ALLOW_PORT` open for as long as a
+ * decision is pending, so the service worker is not evicted while it waits
+ * for the admin — the same precedent as the ceremony port (`ui.ts`).
+ * Nothing here decides what the window shows: `zt:getAllowRequest` reads
+ * the request `background.ts` is holding for this window's `requestId`.
+ */
+import { ALLOW_PORT, type AllowRequestView } from './messages';
+import { RequestFailed, call, h, svg } from './ui';
+
+function readRequestId(): string | null {
+  return new URLSearchParams(location.search).get('requestId');
+}
+
+function renderError(root: HTMLElement, message: string): void {
+  root.replaceChildren(h('div', { class: 'screen' }, h('div', { class: 'body' }, h('p', { class: 'err', role: 'alert' }, message))));
+}
+
+function renderRequest(root: HTMLElement, requestId: string, request: AllowRequestView): void {
+  const error = h('p', { class: 'err', role: 'alert', testid: 'zt-allow-error' });
+  const deny = h('button', { class: 'btn big', type: 'button', testid: 'zt-allow-deny' }, 'Deny');
+  const allow = h('button', { class: 'btn pri big', type: 'button', testid: 'zt-allow-allow' }, 'Allow');
+
+  const decide = (decision: 'allow' | 'deny'): void => {
+    deny.disabled = true;
+    allow.disabled = true;
+    error.textContent = '';
+    // `background.ts` closes this window once it settles the decision as a
+    // success: the page tears down before the reply arrives, so a rejection
+    // from that is expected and ignored. A reply that arrives with
+    // `ok: false` means the window did NOT close, so it must say so and let
+    // the admin try again instead of leaving two disabled buttons with no
+    // explanation.
+    call({ type: 'zt:resolveAllow', requestId, decision }).catch((caught: unknown) => {
+      deny.disabled = false;
+      allow.disabled = false;
+      error.textContent = caught instanceof RequestFailed ? caught.message : 'That did not work. Try again, or close this window.';
+    });
+  };
+  deny.addEventListener('click', () => decide('deny'));
+  allow.addEventListener('click', () => decide('allow'));
+
+  root.replaceChildren(
+    h(
+      'div',
+      { class: 'screen allow' },
+      h('div', { class: 'hd' }, h('div', { class: 'ttl' }, request.origin)),
+      h(
+        'div',
+        { class: 'body' },
+        h('p', { class: 'allow-lead' }, 'Send encrypted phone number and name to the system for the operation'),
+        h('div', { class: 'allow-op', testid: 'zt-allow-operation' }, svg('message', 18), h('span', {}, request.operation)),
+        h('div', { class: 'allow-count' }, h('span', {}, 'People'), h('strong', { testid: 'zt-allow-count' }, String(request.peopleCount))),
+        error,
+      ),
+      h('div', { class: 'actions' }, deny, allow),
+    ),
+  );
+}
+
+async function render(): Promise<void> {
+  const root = document.getElementById('app') as HTMLElement;
+  const requestId = readRequestId();
+  if (!requestId) {
+    renderError(root, 'This window was opened without a request. Close it.');
+    return;
+  }
+  // Keeps the service worker alive for as long as this window is open and
+  // waiting; disconnecting (this window closing) tells `background.ts`
+  // nothing on its own, but the worker staying alive is what lets it still
+  // answer `zt:resolveAllow`, or notice the close through `onWindowRemoved`.
+  chrome.runtime.connect({ name: ALLOW_PORT });
+  try {
+    const { request } = await call<{ request: AllowRequestView }>({ type: 'zt:getAllowRequest', requestId });
+    renderRequest(root, requestId, request);
+  } catch (error) {
+    renderError(root, error instanceof RequestFailed ? error.message : 'This request is no longer open. Close this window.');
+  }
+}
+
+void render();

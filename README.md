@@ -35,6 +35,69 @@ else.
   or any CSV with a `username` or `reference` column. It adds, edits,
   deletes and searches people, and exports an encrypted backup only.
 - It does not change what the web app sends or stores.
+
+## Sending an SMS or an event invite (#3919)
+
+A Zero Trust branch cannot show a member's phone number or name, so it
+cannot send the member a text message itself. The web app asks the
+Translator for an encrypted batch instead, and carries that batch to the
+walled Lambda (`Truertech/RestoreMemberEngagement`, #3920) — the Translator
+never calls a server itself.
+
+- `zt:listCodes` answers with one row per person on the list: a `ref-`
+  code, the username, and whether the phone is a valid UK mobile. Never a
+  name, a number, an email or an address. A locked list refuses with
+  `{ refused: 'locked' }` instead of an empty list, so the page cannot read
+  "locked" as "nobody has a phone number".
+- A person with no code gets one the first time the list is read, in this
+  order: a `ref-` username (a wipe reference) is the code, and
+  `zt:listCodes` gives that person an empty username; else the code the
+  email last had; else a new code. The vault keeps each email's code after
+  the person is deleted, so the same person added again gets the same code.
+- Before each `zt:listCodes` and `zt:encryptForSend`, the Translator cleans
+  up the codes, with the username as the source of truth. A `ref-` username
+  replaces a different code. When two people hold the same code, the person
+  whose username is that code keeps it, else the first person in the list
+  keeps it, and each other person gets a new code. The clean-up changes
+  codes only, never a phone number, so an opt-out (held by number in the
+  walled store) still applies to the person.
+- A page marker (`data-zt-id`) shows the name when it holds the person's
+  username or the person's code.
+- `zt:encryptForSend` takes the operation in the page's own words (1 to 80
+  characters, for example "Send SMS messages"), the codes to send to and the
+  page's own count of people. The Translator is a generic encryption step,
+  so it shows no message text. It never encrypts anything before the admin
+  presses Allow in a window this extension opens, which shows the page
+  origin, the operation wording and the matched count — read from the
+  admin's own list, never the page's claim. On Allow it builds a batch of a fresh one-time token, the time,
+  and each matched code's phone number (E.164) and first name (a person
+  saved with no first and no last name, such as a list from before this
+  feature, gets `name` split on the first space when the list is read);
+  encrypts the
+  batch with a new AES-256-GCM key; and wraps that key with RSA-OAEP-SHA-256
+  under the pinned public key for the page's origin (see "Pinned keys"
+  below). It answers with the wrapped key, the IV and the ciphertext only —
+  nothing in clear reaches the page. Deny, closing the window with no
+  decision, a locked list, and an origin with no pinned key all refuse
+  before anything is encrypted. A second `zt:encryptForSend` while an Allow
+  window is open gets `{ refused: 'busy' }`, and the open window stays.
+- A code the page sends that the admin's list does not hold, and a code
+  with no valid UK mobile, are left out of the batch and out of the count;
+  the admin sees the actual matched count, not the page's count.
+
+### Pinned keys
+
+The Translator will wrap a batch's key only for an origin it has a public
+key pinned for. `src/walled-keys.ts` holds the production and staging
+public keys once #3920 publishes them; an unpinned origin (including any
+origin not named there) gets `{ refused: 'unknown-origin' }`. The
+Translator never takes a key from the page, and no message can set or
+replace a pinned key — the only way a pinned key changes is a new release
+of this extension. The dev build (`npm run build:dev`) pins a key for
+`http://localhost/*` only when `ZT_WALLED_DEV_ORIGIN`, `ZT_WALLED_DEV_KEY_ID`
+and `ZT_WALLED_DEV_PUBLIC_KEY` are all set; a release build never reads
+those variables at all.
+
 ## Installing it
 
 Once published, install it from the Chrome Web Store listing (the

@@ -193,3 +193,10 @@ a:hover { color: #0B4F49; }
   .codes, .codes * { visibility: visible; }
   .codes { position: absolute; left: 0; top: 0; }
 }
+
+/* The Allow window (allow.html), boards 6 and 11 of `_Docs/mockups/zero-trust-sms/` (#3919). */
+.allow .hd { gap: 8px; padding: 12px; }
+.allow-lead { margin: 0; font-size: 16px; font-weight: 600; line-height: 1.4; }
+.allow-op { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1.5px solid #0F766E; border-radius: 10px; background: #E6F4F1; color: #0B5A54; font-size: 15px; font-weight: 600; }
+.allow-count { display: flex; justify-content: space-between; font-size: 14px; }
+.allow .actions .btn { flex: 1; height: 46px; }

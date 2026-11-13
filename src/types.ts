@@ -5,6 +5,11 @@ export type PersonKind = 'user' | 'member' | 'respondent' | '';
  * One row of the offline list. `username` keeps the case it was imported
  * with, for display; every comparison uses `usernameKey(username)`.
  * Every text field is `''` when the list does not hold a value.
+ *
+ * `code` is the id the walled SMS Lambda sees in place of the username
+ * (#3919, `code.ts`): every person gets one, minted once and kept for life.
+ * `firstName` and `lastName` are the split of `name` a send batch needs; an
+ * import that changes `name` re-splits them.
  */
 export interface PersonRecord {
   username: string;
@@ -14,6 +19,9 @@ export interface PersonRecord {
   address: string;
   postcode: string;
   kind: PersonKind;
+  code: string;
+  firstName: string;
+  lastName: string;
 }
 
 /** The fields an import can change. The username never changes by import. */
@@ -32,7 +40,25 @@ export function emailKey(email: string): string {
 }
 
 export function emptyPerson(username: string): PersonRecord {
-  return { username, name: '', email: '', phone: '', address: '', postcode: '', kind: '' };
+  return { username, name: '', email: '', phone: '', address: '', postcode: '', kind: '', code: '', firstName: '', lastName: '' };
+}
+
+/** Splits a display name into a first and a last name, the way a send batch needs them. */
+export function splitName(name: string): { firstName: string; lastName: string } {
+  const trimmed = name.trim();
+  const space = trimmed.indexOf(' ');
+  if (space < 0) return { firstName: trimmed, lastName: '' };
+  return { firstName: trimmed.slice(0, space), lastName: trimmed.slice(space + 1).trim() };
+}
+
+/**
+ * Gives a person with no first and no last name the split of `name`. A
+ * record saved before #3919 has neither key, and a send batch needs the
+ * first name. A person that has either name keeps both as they are.
+ */
+export function withSplitName(person: PersonRecord): PersonRecord {
+  if (person.firstName || person.lastName) return person;
+  return { ...person, ...splitName(person.name ?? '') };
 }
 
 /** One row the CSV reader skipped, and why. 1-based, counting the header as row 1. */

@@ -23,8 +23,8 @@ function person(username: string, fields: Partial<PersonRecord> = {}): PersonRec
   return { ...emptyPerson(username), ...fields };
 }
 
-const jane = person('Macc1', { name: 'Jane Example', email: 'jane@example.org', phone: '07700 900001' });
-const bob = person('macc2', { name: 'Bob Sample', email: 'bob@example.org' });
+const jane = person('Macc1', { name: 'Jane Example', email: 'jane@example.org', phone: '07700 900001', firstName: 'Jane', lastName: 'Example' });
+const bob = person('macc2', { name: 'Bob Sample', email: 'bob@example.org', firstName: 'Bob', lastName: 'Sample' });
 
 describe('detectCsvFormat', () => {
   it.each([
@@ -231,7 +231,7 @@ describe('applyNationBuilder', () => {
   it('writes only the ticked fields and leaves the unticked ones unchanged, without changing the input', () => {
     const input = [jane, bob];
 
-    expect(applyNationBuilder(input, plan, ['name'])).toEqual([{ ...jane, name: 'Jane A. Example' }, bob]);
+    expect(applyNationBuilder(input, plan, ['name'])).toEqual([{ ...jane, name: 'Jane A. Example', firstName: 'Jane', lastName: 'A. Example' }, bob]);
     expect(input).toEqual([jane, bob]);
   });
 
@@ -282,7 +282,7 @@ describe('applyCsv', () => {
 `;
 
     expect(applyCsv(text, [jane, bob], ['name'])).toEqual({
-      people: [{ ...jane, name: 'Jane A. Example' }, bob],
+      people: [{ ...jane, name: 'Jane A. Example', firstName: 'Jane', lastName: 'A. Example' }, bob],
       result: { kind: 'nationbuilder', added: 0, updated: 1, unchanged: 0, skipped: [] },
     });
   });
@@ -291,7 +291,7 @@ describe('applyCsv', () => {
     const text = `${MEMBER_HEADER}\nJane A. Example,,,,jane@example.org,07700 900002,\nBob Sample,,,,bob@example.org,,\n,,,,,,\n`;
 
     expect(applyCsv(text, [jane, bob], ['name'])).toEqual({
-      people: [{ ...jane, name: 'Jane A. Example' }, bob],
+      people: [{ ...jane, name: 'Jane A. Example', firstName: 'Jane', lastName: 'A. Example' }, bob],
       result: { kind: 'nationbuilder', added: 0, updated: 1, unchanged: 1, skipped: [{ row: 4, reason: 'no email', label: '' }] },
     });
   });
@@ -300,7 +300,11 @@ describe('applyCsv', () => {
     const text = 'username,name\nMACC1,Jane A. Example\nmacc3,New Person\nmacc2,Bob Sample\n,Nobody\n';
 
     expect(applyCsv(text, [jane, bob], DETAIL_FIELDS)).toEqual({
-      people: [{ ...jane, name: 'Jane A. Example' }, bob, person('macc3', { name: 'New Person' })],
+      people: [
+        { ...jane, name: 'Jane A. Example', firstName: 'Jane', lastName: 'A. Example' },
+        bob,
+        person('macc3', { name: 'New Person', firstName: 'New', lastName: 'Person' }),
+      ],
       result: { kind: 'people', added: 1, updated: 1, unchanged: 1, skipped: [{ row: 5, reason: 'no username', label: 'Nobody' }] },
     });
   });

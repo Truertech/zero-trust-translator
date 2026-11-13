@@ -26,6 +26,17 @@ const outDirName = process.env['OUT_DIR'] ?? (isDev ? 'dist-dev' : 'dist');
 const outDir = join(ROOT, outDirName);
 const sourceDateEpoch = Number(process.env['SOURCE_DATE_EPOCH'] ?? '0');
 
+// The dev-only pinned walled key (#3919, `walled-keys.ts`), supplied by the
+// RME e2e helper that drives this build. Absent for every other build, dev
+// or release: those bundles pin no walled key at all.
+const walledDevOrigin = process.env['ZT_WALLED_DEV_ORIGIN'];
+const walledDevKeyId = process.env['ZT_WALLED_DEV_KEY_ID'];
+const walledDevPublicKey = process.env['ZT_WALLED_DEV_PUBLIC_KEY'];
+const walledDevDefine =
+  isDev && walledDevOrigin && walledDevKeyId && walledDevPublicKey
+    ? { __ZT_DEV_WALLED_KEY__: JSON.stringify(JSON.stringify({ origin: walledDevOrigin, keyId: walledDevKeyId, publicKeySpki: walledDevPublicKey })) }
+    : {};
+
 function bundle(entry, outfile) {
   esbuild.buildSync({
     entryPoints: [join(ROOT, 'src', entry)],
@@ -39,7 +50,7 @@ function bundle(entry, outfile) {
     // `fetch`/`XMLHttpRequest` import here would be dead code the bundler
     // keeps; `scripts/check-no-network.mjs` is the real gate, this is belt
     // and braces.
-    define: { 'process.env.NODE_ENV': isDev ? '"development"' : '"production"' },
+    define: { 'process.env.NODE_ENV': isDev ? '"development"' : '"production"', ...walledDevDefine },
   });
 }
 
@@ -67,18 +78,19 @@ function main() {
   bundle('options.ts', 'options.js');
   bundle('popup.ts', 'popup.js');
   bundle('unlock.ts', 'unlock.js');
+  bundle('allow.ts', 'allow.js');
 
   const manifestJson = buildManifest();
   writeFileSync(join(outDir, 'manifest.json'), manifestJson);
   const { version } = JSON.parse(manifestJson);
 
   const files = [{ name: 'manifest.json', data: Buffer.from(manifestJson) }];
-  for (const name of ['background.js', 'content.js', 'options.js', 'popup.js', 'unlock.js']) {
+  for (const name of ['background.js', 'content.js', 'options.js', 'popup.js', 'unlock.js', 'allow.js']) {
     files.push({ name, data: readFileSync(join(outDir, name)) });
   }
   // The pages hold the only remote addresses (the source and release
   // links), so `check-no-network.mjs` can refuse every URL in a bundle.
-  for (const name of ['options.css', 'options.html', 'popup.css', 'popup.html', 'unlock.html']) {
+  for (const name of ['options.css', 'options.html', 'popup.css', 'popup.html', 'unlock.html', 'allow.html']) {
     const data = Buffer.from(readFileSync(join(ROOT, 'src', name), 'utf8').replaceAll('__VERSION__', version));
     writeFileSync(join(outDir, name), data);
     files.push({ name, data });

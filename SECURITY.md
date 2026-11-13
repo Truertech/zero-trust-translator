@@ -35,6 +35,31 @@ uploads the list or a key (see the "no network" checks in `README.md`).
 - If every unlock method and the recovery code are lost, the list cannot be
   opened. Nobody, including the maintainers, can recover it.
 
+## The send batch (#3919)
+
+`zt:encryptForSend` (see `README.md`) lets the web app ask the Translator
+to encrypt a batch of phone numbers and first names for the walled Lambda
+(#3920), without the Translator ever holding a network permission or
+calling a server itself.
+
+- The admin must press Allow in a window this extension opens; nothing is
+  encrypted before that, and the window shows the page origin (from
+  Chrome, so the page cannot forge it), the operation in the page's own
+  words, and the matched count, read from the admin's own list.
+- The batch (a one-time token, the time, and each matched person's E.164
+  phone number and first name) is encrypted with a fresh, random AES-256-GCM
+  key. That key is then wrapped with RSA-OAEP-SHA-256 under the walled
+  Lambda's public key, pinned by page origin in `src/walled-keys.ts`. Only
+  the matching Lambda's private key, which this extension never holds, can
+  unwrap it.
+- A pinned key is never taken from a page, and no message this extension
+  answers can set or replace one: the only way a pinned key changes is a
+  new release of this extension. An origin with no pinned key gets
+  `{ refused: 'unknown-origin' }`, never a batch encrypted under the wrong
+  key or under no key at all.
+- Deny, closing the Allow window with no decision, and a locked list all
+  refuse before anything is encrypted.
+
 ## Reporting a problem
 
 Open an issue in this repository:

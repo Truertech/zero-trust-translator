@@ -308,7 +308,22 @@ describe('setup', () => {
     expect(w.chrome.session.data).not.toHaveProperty(SETUP_KEY);
     const state = await stateOf(w);
     expect(state).toMatchObject({ phase: 'unlocked', lastCheckAt: T0, peopleCount: 1, setupRecoveryMade: true, lockReason: null });
-    expect(await peopleOf(w)).toEqual([{ username: 'macc1', name: 'Jane Example', email: '', phone: '', address: '', postcode: '', kind: '' }]);
+    expect(await peopleOf(w)).toEqual([
+      {
+        username: 'macc1',
+        name: 'Jane Example',
+        email: '',
+        phone: '',
+        address: '',
+        postcode: '',
+        kind: '',
+        // `people()` mints a code for every code-less record on this read (#3919).
+        code: expect.stringMatching(/^ref-[a-z0-9]{8}$/),
+        // The v0.1.0 name is split for the send batch (#3919).
+        firstName: 'Jane',
+        lastName: 'Example',
+      },
+    ]);
     expect(w.chrome.idleIntervals).toEqual([DEFAULT_SETTINGS.autoLockMinutes * 60]);
     expect(refreshTabs(w.chrome)).toEqual([1, TAB_WITHOUT_CONTENT_SCRIPT]);
     expect(JSON.stringify(w.chrome.local.data)).not.toContain('Jane');
@@ -753,6 +768,10 @@ describe('the list', () => {
       address: '',
       postcode: '',
       kind: '',
+      // `people()` mints a code for every code-less record on this read (#3919).
+      code: expect.stringMatching(/^ref-[a-z0-9]{8}$/),
+      firstName: '',
+      lastName: '',
     });
     expect(refreshTabs(w.chrome)).toEqual([1, TAB_WITHOUT_CONTENT_SCRIPT]);
   });

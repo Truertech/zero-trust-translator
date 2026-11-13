@@ -92,6 +92,9 @@ describe('parsePeopleCsv', () => {
           phone: '07700 900000',
           address: '1 High Street',
           postcode: 'AB1 2CD',
+          code: '',
+          firstName: 'Jane',
+          lastName: 'Example',
         },
       ],
       skipped: [],
@@ -101,7 +104,9 @@ describe('parsePeopleCsv', () => {
   it('accepts a "reference" id column and a combined "name" column, with headers in any case and spacing', () => {
     const { imported } = parsePeopleCsv(' Reference , NAME \nR-7,Jane Example\n');
 
-    expect(imported).toEqual([{ username: 'R-7', name: 'Jane Example', email: '', phone: '', address: '', postcode: '', kind: '' }]);
+    expect(imported).toEqual([
+      { username: 'R-7', name: 'Jane Example', email: '', phone: '', address: '', postcode: '', kind: '', code: '', firstName: 'Jane', lastName: 'Example' },
+    ]);
   });
 
   it('keeps the case of the username as it was imported', () => {
@@ -161,6 +166,9 @@ describe('parsePeopleCsv', () => {
       phone: '',
       address: '',
       postcode: '',
+      code: '',
+      firstName: '',
+      lastName: '',
     });
   });
 
@@ -182,5 +190,20 @@ describe('parsePeopleCsv', () => {
 
   it('gives MissingIdColumnError the message the popup shows', () => {
     expect(() => parsePeopleRows([])).toThrow('The file has no "username" or "reference" column.');
+  });
+
+  it('keeps the first and last name columns as they are, and does not split the name column (#3919)', () => {
+    const { imported } = parsePeopleCsv('username,name,first name,last name\nu1,Jane A. Example,Jane A.,Example\n');
+    expect(imported[0]).toMatchObject({ name: 'Jane A. Example', firstName: 'Jane A.', lastName: 'Example' });
+  });
+
+  it('takes a last name column with no first name column as the last name only (#3919)', () => {
+    const { imported } = parsePeopleCsv('username,last name\nu1,Example\n');
+    expect(imported[0]).toMatchObject({ name: 'Example', firstName: '', lastName: 'Example' });
+  });
+
+  it('splits the name column when the first and last name cells are empty (#3919)', () => {
+    const { imported } = parsePeopleCsv('username,name,first name,last name\nu1,Jane Example,,\n');
+    expect(imported[0]).toMatchObject({ firstName: 'Jane', lastName: 'Example' });
   });
 });

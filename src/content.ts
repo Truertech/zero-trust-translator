@@ -32,7 +32,7 @@
  * with the page but not its JS objects), so even `window` and its event
  * listeners in the page's world never receive what this script does.
  */
-import { REFRESH_MESSAGE, type NamesResponse, type Response } from './messages';
+import { REFRESH_MESSAGE, type NamesResponse, type Request, type Response } from './messages';
 
 const MARKER_SELECTOR = '[data-zt-id]';
 const RESCAN_DELAY_MS = 150;
@@ -230,7 +230,57 @@ function touchesMarkers(mutations: MutationRecord[]): boolean {
   return false;
 }
 
+/**
+ * `zt:listCodes` and `zt:encryptForSend` (#3919): the page cannot call
+ * `chrome.runtime.sendMessage` itself (only an extension's own scripts can),
+ * so it asks by `window.postMessage` and this script relays the one request
+ * to the service worker and the one answer back. `origin` is added here,
+ * from `location.origin`, never from the page's message: the page cannot
+ * claim to be an origin it is not. See `_Docs/zero-trust-translator.md`.
+ */
+const PAGE_MESSAGE_SOURCE = 'zero-trust-translator-page';
+const EXTENSION_MESSAGE_SOURCE = 'zero-trust-translator-extension';
+
+interface PageRequestEnvelope {
+  source: typeof PAGE_MESSAGE_SOURCE;
+  requestId: string;
+  request: Request;
+}
+
+function isPageRequestEnvelope(data: unknown): data is PageRequestEnvelope {
+  const value = data as Partial<PageRequestEnvelope> | null;
+  return (
+    !!value &&
+    value.source === PAGE_MESSAGE_SOURCE &&
+    typeof value.requestId === 'string' &&
+    !!value.request &&
+    typeof value.request === 'object' &&
+    (value.request.type === 'zt:listCodes' || value.request.type === 'zt:encryptForSend')
+  );
+}
+
+async function relayToBackground(request: Request): Promise<unknown> {
+  try {
+    return await chrome.runtime.sendMessage({ ...request, origin: location.origin });
+  } catch {
+    return { ok: false, error: 'forbidden', message: 'The extension was reloaded or removed.' };
+  }
+}
+
+function startPageRelay(): void {
+  window.addEventListener('message', (event) => {
+    if (event.source !== window || event.origin !== location.origin || !isPageRequestEnvelope(event.data)) {
+      return;
+    }
+    const { requestId, request } = event.data;
+    void relayToBackground(request).then((response) => {
+      window.postMessage({ source: EXTENSION_MESSAGE_SOURCE, requestId, response }, location.origin);
+    });
+  });
+}
+
 function start(): void {
+  startPageRelay();
   void refresh();
   new MutationObserver((mutations) => {
     if (touchesMarkers(mutations)) {
