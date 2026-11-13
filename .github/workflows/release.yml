@@ -1,20 +1,92 @@
 name: Release
 
+# Two events start a release:
+# - A merge to main. When CI passes on the main push, the `bump` job raises
+#   the patch version in manifest.json and package.json, commits it, tags it
+#   and pushes both. The `release` job then builds and publishes that tag.
+# - A `v*` tag pushed by hand. The `release` job builds and publishes it.
+#
+# The bump commit and the tag are pushed with GITHUB_TOKEN. GitHub starts no
+# workflow for a push made with GITHUB_TOKEN, so the bump commit does not
+# start CI or this workflow again.
 on:
   push:
     tags:
       - 'v*'
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
 
 permissions:
   contents: write
   id-token: write
   attestations: write
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
-  release:
+  bump:
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      !startsWith(github.event.workflow_run.head_commit.message, 'chore(release):')
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.bump.outputs.tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Stop when main has moved past the tested commit
+        id: tip
+        env:
+          TESTED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if [ "$(git rev-parse HEAD)" != "$TESTED_SHA" ]; then
+            echo "main is at $(git rev-parse HEAD), CI passed on $TESTED_SHA. The CI run of the newer commit releases it."
+            echo "moved=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "moved=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Raise the patch version, commit, tag and push
+        id: bump
+        if: steps.tip.outputs.moved == 'false'
+        run: |
+          set -euo pipefail
+          NEXT=$(node scripts/bump-patch.mjs)
+          if git rev-parse -q --verify "refs/tags/v${NEXT}" >/dev/null; then
+            echo "Tag v${NEXT} exists already." >&2
+            exit 1
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add manifest.json package.json
+          git commit -m "chore(release): bump version to ${NEXT}"
+          git tag "v${NEXT}"
+          git push origin HEAD:main "v${NEXT}"
+          echo "tag=v${NEXT}" >> "$GITHUB_OUTPUT"
+
+  release:
+    needs: bump
+    if: >-
+      always() &&
+      ((github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+       (needs.bump.result == 'success' && needs.bump.outputs.tag != ''))
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || needs.bump.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ github.event_name == 'push' && github.ref_name || needs.bump.outputs.tag }}
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -24,10 +96,10 @@ jobs:
 
       - name: Check the tag matches manifest.json version
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
+          TAG="${RELEASE_TAG#v}"
           MANIFEST_VERSION=$(node -p "require('./manifest.json').version")
           if [ "$TAG" != "$MANIFEST_VERSION" ]; then
-            echo "Tag ${GITHUB_REF_NAME} does not match manifest.json version ${MANIFEST_VERSION}" >&2
+            echo "Tag ${RELEASE_TAG} does not match manifest.json version ${MANIFEST_VERSION}" >&2
             exit 1
           fi
 
@@ -53,8 +125,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" dist.zip dist.zip.sha256 \
-            --title "${GITHUB_REF_NAME}" \
+          gh release create "${RELEASE_TAG}" dist.zip dist.zip.sha256 \
+            --title "${RELEASE_TAG}" \
             --notes "Built from $(git rev-parse HEAD). SHA-256: $(cat dist.zip.sha256)."
 
       - name: Record whether the Chrome Web Store secrets are present

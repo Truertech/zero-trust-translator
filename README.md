@@ -61,6 +61,18 @@ npm run check-no-network   # fails if dist/ can reach the network
 npm run test:e2e       # Playwright, against the extension's own fixture page (needs a leased box: see this repository's own CLAUDE.md-equivalent rule against running Playwright on a bare machine if you use the persona fleet)
 ```
 
+## How a release starts
+
+Every merge to `main` makes a release. When CI passes on the push to `main`,
+`.github/workflows/release.yml` runs `scripts/bump-patch.mjs`, which raises
+the patch version in `manifest.json` and `package.json`. The workflow commits
+that as `chore(release): bump version to <version>`, tags it `v<version>`,
+pushes both, and publishes the GitHub release for the tag. A `v*` tag pushed
+by hand still makes a release; its version must match `manifest.json`.
+
+If `main` moves on before the release starts, that run makes no release. The
+CI run of the newer commit makes it instead.
+
 ## How the release build is deterministic
 
 `scripts/build.mjs` bundles the service worker, the content script, the
