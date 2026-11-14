@@ -39,6 +39,7 @@ describe('types helpers', () => {
       code: '',
       firstName: '',
       lastName: '',
+      nbId: '',
     });
   });
 });

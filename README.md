@@ -30,10 +30,17 @@ else.
   `host_permissions`, no network call, no remote font or image, no analytics
   and no `chrome.storage.sync`.
 - The popup imports `people.csv` (the wipe download), a NationBuilder
-  Export CSV (matched by email; an email not in the list adds a new person
-  with no username, for the admin to type later), an encrypted `.ztbackup` file,
-  or any CSV with a `username` or `reference` column. It adds, edits,
-  deletes and searches people, and exports an encrypted backup only.
+  Export CSV, an encrypted `.ztbackup` file, or any CSV with a `username` or
+  `reference` column. A NationBuilder row is matched by NationBuilder id
+  (the `nationbuilderId` column of the member import layout, or the `id`
+  column of "All columns" and of a mailing), else by email. An email not in
+  the list adds a new person. It adds, edits, deletes and searches people,
+  and exports an encrypted backup only.
+- A person with a NationBuilder id has the code `ref-nb<id>`, for example
+  `ref-nb12345`, on every admin's device. A new person from NationBuilder
+  gets that code as the username too, for the admin to change later. The
+  web app's RSVP link `#nb={{recipient.id}}` names the same code, so an RSVP
+  from a NationBuilder email reaches the same person as an SMS send.
 - It does not change what the web app sends or stores.
 
 ## Sending an SMS or an event invite
@@ -50,12 +57,13 @@ never calls a server itself.
   `{ refused: 'locked' }` instead of an empty list, so the page cannot read
   "locked" as "nobody has a phone number".
 - A person with no code gets one the first time the list is read, in this
-  order: a `ref-` username (a wipe reference) is the code, and
+  order: `ref-nb<id>` for a person with a NationBuilder id; else a `ref-` username (a wipe reference) is the code, and
   `zt:listCodes` gives that person an empty username; else the code the
   email last had; else a new code. The vault keeps each email's code after
   the person is deleted, so the same person added again gets the same code.
 - Before each `zt:listCodes` and `zt:encryptForSend`, the Translator cleans
-  up the codes, with the username as the source of truth. A `ref-` username
+  up the codes, with the NationBuilder id, then the username, as the source
+  of truth. `ref-nb<id>` replaces a different code; else a `ref-` username
   replaces a different code. When two people hold the same code, the person
   whose username is that code keeps it, else the first person in the list
   keeps it, and each other person gets a new code. The clean-up changes

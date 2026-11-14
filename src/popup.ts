@@ -4,11 +4,11 @@
  * (`background.ts`), which holds the data key while the list is unlocked.
  */
 import { isRefCode } from './code';
-import { countMatches, isBackupText, type CsvPreview, type ImportResult, type NbPlan } from './import';
+import { countMatches, isBackupText, nbIdChanges, type CsvPreview, type ImportResult, type NbPlan } from './import';
 import { PASSWORD_LOCKOUT_MS, type SecretMessage, type StateView } from './messages';
 import { passwordForm } from './password-form';
 import { searchPeople } from './store';
-import { DETAIL_FIELDS, type DetailField, type PersonKind, type PersonRecord, usernameKey } from './types';
+import { DETAIL_FIELDS, nbIdOf, type DetailField, type PersonKind, type PersonRecord, usernameKey } from './types';
 import {
   RequestFailed,
   autoLockLabel,
@@ -637,6 +637,7 @@ function showEdit(person: PersonRecord): void {
           readOnlyRow('Email', person.email),
           readOnlyRow('Mobile', person.phone),
           readOnlyRow('ID', person.code),
+          nbIdOf(person) !== '' && readOnlyRow('NationBuilder ID', nbIdOf(person)),
           readOnlyRow('Address', person.address),
           readOnlyRow('Postcode', person.postcode),
         ),
@@ -751,7 +752,7 @@ function showImportChoose(message = ''): void {
           {},
           h('div', { class: 'sect' }, 'Files you can import'),
           format('ZT', 'people.csv', 'From the Zero Trust download'),
-          format('NB', 'NationBuilder Export', 'Matched by email; new emails are added'),
+          format('NB', 'NationBuilder Export', 'Matched by NationBuilder ID or email; new people are added'),
           format('ZT', 'Encrypted backup', 'A .ztbackup file from Export backup'),
           format('CSV', 'Other CSV', 'Columns username or reference, and name', true),
         ),
@@ -774,7 +775,7 @@ function showNbPreview(fileName: string, text: string, preview: Extract<CsvPrevi
   const draw = (): void => {
     const { changed, upToDate } = countMatches(plan, fields);
     summary.replaceChildren(
-      line('Matched to a username by email', plan.matched.length, 'rule', '#0F766E'),
+      line('Matched by NationBuilder ID or email', plan.matched.length, 'rule', '#0F766E'),
       line('Name or details change', changed, 'sub'),
       line('Already up to date', upToDate, 'sub rule'),
       line('New people, no username yet', plan.newPeople.length, 'rule', '#0F766E'),
@@ -839,7 +840,7 @@ function showNbConfirm(fileName: string, text: string, preview: Extract<CsvPrevi
       { class: 'ch', testid: 'zt-import-change' },
       h('div', { class: 'top' }, h('b', {}, match.name || NO_NAME), h('span', { class: 'mono' }, match.username)),
       ...match.changes.map((c) =>
-        h('div', { class: 'r' }, h('span', { class: 'k' }, FIELD_LABELS[c.field]), c.from && h('span', { class: 'old' }, c.from), h('span', { class: 'new' }, c.to)),
+        h('div', { class: 'r' }, h('span', { class: 'k' }, c.label), c.from && h('span', { class: 'old' }, c.from), h('span', { class: 'new' }, c.to)),
       ),
     );
   const list = h('div', { style: 'flex:1;overflow:auto;padding:4px 16px 12px', testid: 'zt-import-changes' }, ...changed.slice(0, SHOWN_CHANGES).map(changeBlock));
@@ -877,18 +878,38 @@ function showNbConfirm(fileName: string, text: string, preview: Extract<CsvPrevi
   );
 }
 
-/** Each new person as a change block: no username yet, and every ticked field that has a value. */
-function newMatches(plan: NbPlan, fields: DetailField[]): { username: string; name: string; changes: NbPlan['matched'][number]['changes'] }[] {
+/** One line of a change block: the label, the old value (empty for none) and the new value. */
+interface ShownChange {
+  label: string;
+  from: string;
+  to: string;
+}
+
+/** The NationBuilder ID line, written whatever the ticked fields. */
+const NB_ID_LABEL = 'NationBuilder ID';
+
+/** Each new person as a change block: no username yet, the NationBuilder ID, and every ticked field that has a value. */
+function newMatches(plan: NbPlan, fields: DetailField[]): { username: string; name: string; changes: ShownChange[] }[] {
   return plan.newPeople.map((p) => ({
     username: `New · ${p.email}`,
     name: fields.includes('name') ? p.values.name : '',
-    changes: fields.filter((f) => p.values[f] !== '').map((f) => ({ field: f, from: '', to: p.values[f] })),
+    changes: [
+      ...(p.nbId !== '' ? [{ label: NB_ID_LABEL, from: '', to: p.nbId }] : []),
+      ...fields.filter((f) => p.values[f] !== '').map((f) => ({ label: FIELD_LABELS[f], from: '', to: p.values[f] })),
+    ],
   }));
 }
 
-function changedMatches(plan: NbPlan, fields: DetailField[]): { username: string; name: string; changes: NbPlan['matched'][number]['changes'] }[] {
+function changedMatches(plan: NbPlan, fields: DetailField[]): { username: string; name: string; changes: ShownChange[] }[] {
   return plan.matched
-    .map((m) => ({ username: m.username, name: m.name, changes: m.changes.filter((c) => fields.includes(c.field)) }))
+    .map((m) => ({
+      username: m.username,
+      name: m.name,
+      changes: [
+        ...(nbIdChanges(m) ? [{ label: NB_ID_LABEL, from: m.previousNbId, to: m.nbId }] : []),
+        ...m.changes.filter((c) => fields.includes(c.field)).map((c) => ({ label: FIELD_LABELS[c.field], from: c.from, to: c.to })),
+      ],
+    }))
     .filter((m) => m.changes.length > 0);
 }
 

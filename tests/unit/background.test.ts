@@ -322,6 +322,7 @@ describe('setup', () => {
         // The v0.1.0 name is split for the send batch.
         firstName: 'Jane',
         lastName: 'Example',
+        nbId: '',
       },
     ]);
     expect(w.chrome.idleIntervals).toEqual([DEFAULT_SETTINGS.autoLockMinutes * 60]);
@@ -772,6 +773,7 @@ describe('the list', () => {
       code: expect.stringMatching(/^ref-[a-z0-9]{8}$/),
       firstName: '',
       lastName: '',
+      nbId: '',
     });
     expect(refreshTabs(w.chrome)).toEqual([1, TAB_WITHOUT_CONTENT_SCRIPT]);
   });

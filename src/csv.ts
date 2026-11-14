@@ -150,6 +150,7 @@ export function parsePeopleRows(rows: string[][]): ParsedPeopleCsv {
       code: '',
       firstName,
       lastName,
+      nbId: '',
     });
   }
   return { imported, skipped };

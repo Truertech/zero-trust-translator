@@ -5,7 +5,7 @@
  * `ref-` references, so the web app draws a code with the same shield it
  * draws a `ref-` reference with.
  */
-import { emailKey, usernameKey, withSplitName, type PersonRecord } from './types';
+import { emailKey, nationBuilderCode, nbIdOf, usernameKey, withSplitName, type PersonRecord } from './types';
 import { randomBytes } from './vault';
 
 const CODE_ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789';
@@ -31,11 +31,29 @@ export function isRefCode(value: string): boolean {
 export type CodeHistory = Record<string, string>;
 
 /**
- * The code a person with no code gets, in this order: a `ref-` username
- * (the wipe reference) is the code; else the code the history
- * holds for the email; else a new code.
+ * The code a person must have, or `''` when any code will do: a person with
+ * a NationBuilder id has `ref-nb<id>`; else a `ref-` username (the wipe
+ * reference) is the code.
+ */
+function requiredCode(person: PersonRecord): string {
+  const nb = nationBuilderCode(nbIdOf(person));
+  if (nb !== '') {
+    return nb;
+  }
+  const key = usernameKey(person.username);
+  return isRefCode(key) ? key : '';
+}
+
+/**
+ * The code a person with no code gets, in this order: the NationBuilder
+ * code (`ref-nb<id>`); else a `ref-` username (the wipe reference) is the
+ * code; else the code the history holds for the email; else a new code.
  */
 function firstCode(person: PersonRecord, history: CodeHistory): string {
+  const nb = nationBuilderCode(nbIdOf(person));
+  if (nb !== '') {
+    return nb;
+  }
   if (isRefCode(usernameKey(person.username))) {
     return usernameKey(person.username);
   }
@@ -63,22 +81,24 @@ export function ensureCoded(people: PersonRecord[], history: CodeHistory = {}): 
 
 /**
  * The clean-up that runs before each SMS operation (`zt:listCodes`,
- * `zt:encryptForSend`). The username is the source of truth:
- * - a person whose username is a `ref-` reference has that reference as the code;
- * - when two people hold the same code, the person whose username is that
- *   code keeps it, else the first person in the list keeps it, and each
- *   other person gets a new code.
+ * `zt:encryptForSend`). The NationBuilder id, then the username, is the
+ * source of truth:
+ * - a person with a NationBuilder id has `ref-nb<id>` as the code;
+ * - else a person whose username is a `ref-` reference has that reference as the code;
+ * - when two people hold the same code, the person who must have that code
+ *   (by NationBuilder id or username) keeps it, else the first person in the
+ *   list keeps it, and each other person gets a new code.
  * The clean-up changes codes only. It never removes a person and never
  * changes a phone number, so an opt-out (held by number in the walled
  * store) still applies to the person after a code change.
  */
 export function resolveCodeConflicts(people: PersonRecord[], history: CodeHistory = {}): { people: PersonRecord[]; history: CodeHistory } {
   const fromUsername = people.map((p) => {
-    const key = usernameKey(p.username);
-    return isRefCode(key) && p.code !== key ? { ...p, code: key } : p;
+    const required = requiredCode(p);
+    return required !== '' && p.code !== required ? { ...p, code: required } : p;
   });
   const owner = new Map<string, number>();
-  const claims = (p: PersonRecord): boolean => usernameKey(p.username) === p.code;
+  const claims = (p: PersonRecord): boolean => requiredCode(p) === p.code;
   fromUsername.forEach((p, i) => {
     const current = owner.get(p.code);
     if (current === undefined || (claims(p) && !claims(fromUsername[current]!))) {

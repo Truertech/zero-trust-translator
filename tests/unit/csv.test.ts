@@ -95,6 +95,7 @@ describe('parsePeopleCsv', () => {
           code: '',
           firstName: 'Jane',
           lastName: 'Example',
+          nbId: '',
         },
       ],
       skipped: [],
@@ -105,7 +106,7 @@ describe('parsePeopleCsv', () => {
     const { imported } = parsePeopleCsv(' Reference , NAME \nR-7,Jane Example\n');
 
     expect(imported).toEqual([
-      { username: 'R-7', name: 'Jane Example', email: '', phone: '', address: '', postcode: '', kind: '', code: '', firstName: 'Jane', lastName: 'Example' },
+      { username: 'R-7', name: 'Jane Example', email: '', phone: '', address: '', postcode: '', kind: '', code: '', firstName: 'Jane', lastName: 'Example', nbId: '' },
     ]);
   });
 
@@ -169,6 +170,7 @@ describe('parsePeopleCsv', () => {
       code: '',
       firstName: '',
       lastName: '',
+      nbId: '',
     });
   });
 

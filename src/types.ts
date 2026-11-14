@@ -10,6 +10,11 @@ export type PersonKind = 'user' | 'member' | 'respondent' | '';
  * (`code.ts`): every person gets one, minted once and kept for life.
  * `firstName` and `lastName` are the split of `name` a send batch needs; an
  * import that changes `name` re-splits them.
+ * `nbId` is the person's NationBuilder member id, from a NationBuilder
+ * Export import. A person with an `nbId` has the code `ref-nb<nbId>`
+ * (`nationBuilderCode`), the same code on every admin's device, so the
+ * RSVP link `#nb={{recipient.id}}` names the same code. A record saved
+ * before this field existed has no `nbId` key: read it with `nbIdOf`.
  */
 export interface PersonRecord {
   username: string;
@@ -22,6 +27,7 @@ export interface PersonRecord {
   code: string;
   firstName: string;
   lastName: string;
+  nbId: string;
 }
 
 /** The fields an import can change. The username never changes by import. */
@@ -40,7 +46,23 @@ export function emailKey(email: string): string {
 }
 
 export function emptyPerson(username: string): PersonRecord {
-  return { username, name: '', email: '', phone: '', address: '', postcode: '', kind: '', code: '', firstName: '', lastName: '' };
+  return { username, name: '', email: '', phone: '', address: '', postcode: '', kind: '', code: '', firstName: '', lastName: '', nbId: '' };
+}
+
+/** The NationBuilder id of a person, or `''`. A record saved before `nbId` existed has no key. */
+export function nbIdOf(person: PersonRecord): string {
+  return typeof person.nbId === 'string' ? person.nbId.trim() : '';
+}
+
+/** A NationBuilder member id is a whole number. Anything else is not an id. */
+export function isNationBuilderId(value: string): boolean {
+  return /^[0-9]{1,18}$/.test(value.trim());
+}
+
+/** The code of a person with a NationBuilder id: `ref-nb` and the id, for example `ref-nb12345`. `''` for no valid id. */
+export function nationBuilderCode(nbId: string): string {
+  const id = nbId.trim();
+  return isNationBuilderId(id) ? `ref-nb${id}` : '';
 }
 
 /** Splits a display name into a first and a last name, the way a send batch needs them. */

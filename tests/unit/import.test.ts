@@ -115,6 +115,8 @@ describe('planNationBuilderImport', () => {
             { field: 'address', from: '', to: '2 Low Road' },
             { field: 'postcode', from: '', to: 'AB1 2CD' },
           ],
+          nbId: '',
+          previousNbId: '',
         },
       ],
       newPeople: [],
@@ -132,7 +134,7 @@ describe('planNationBuilderImport', () => {
   it('does not let the email default for a missing name overwrite the name', () => {
     const rows = parseCsvRows(`${MEMBER_HEADER}\nJane@Example.org,Unknown,UNKNOWN,,jane@example.org,,\n`);
 
-    expect(planNationBuilderImport(rows, 'nb-member', [jane]).matched).toEqual([{ row: 2, username: 'Macc1', name: 'Jane Example', changes: [] }]);
+    expect(planNationBuilderImport(rows, 'nb-member', [jane]).matched).toEqual([{ row: 2, username: 'Macc1', name: 'Jane Example', changes: [], nbId: '', previousNbId: '' }]);
   });
 
   it('reads the cells past the end of a short row as empty', () => {
@@ -168,7 +170,7 @@ describe('planNationBuilderImport', () => {
       { row: 4, reason: 'no email', label: 'Not An Email' },
     ]);
     expect(plan.newPeople).toEqual([
-      { row: 5, email: 'stranger@example.org', values: { name: 'Stranger', phone: '07700 900009', address: '9 Far Lane', postcode: 'ZZ1 1ZZ' } },
+      { row: 5, email: 'stranger@example.org', values: { name: 'Stranger', phone: '07700 900009', address: '9 Far Lane', postcode: 'ZZ1 1ZZ' }, nbId: '' },
     ]);
     expect(plan.duplicate).toEqual([
       { row: 6, reason: 'duplicate', label: 'jane@example.org' },
@@ -196,6 +198,8 @@ const match: NbMatch = {
     { field: 'name', from: 'Jane Example', to: 'Jane A. Example' },
     { field: 'phone', from: '07700 900001', to: '07700 900002' },
   ],
+  nbId: '',
+  previousNbId: '',
 };
 
 describe('changesFor', () => {
@@ -210,7 +214,7 @@ describe('countMatches and skippedRows', () => {
     format: 'nb-member' as const,
     rowCount: 5,
     matched: [match, { ...match, row: 3, username: 'macc2', changes: [] }],
-    newPeople: [{ row: 6, email: 'new@example.org', values: { name: 'New', phone: '', address: '', postcode: '' } }],
+    newPeople: [{ row: 6, email: 'new@example.org', values: { name: 'New', phone: '', address: '', postcode: '' }, nbId: '' }],
     noEmail: [{ row: 4, reason: 'no email' }],
     duplicate: [{ row: 5, reason: 'duplicate' }],
   };
@@ -244,7 +248,7 @@ describe('applyNationBuilder', () => {
   const newPlan = {
     ...plan,
     matched: [],
-    newPeople: [{ row: 3, email: 'new@example.org', values: { name: 'Nina New Person', phone: '07700 900003', address: '3 New St', postcode: 'NN1 1NN' } }],
+    newPeople: [{ row: 3, email: 'new@example.org', values: { name: 'Nina New Person', phone: '07700 900003', address: '3 New St', postcode: 'NN1 1NN' }, nbId: '' }],
   };
 
   it('adds a new person with a ref- code as the username, the email, and every ticked field, with the name split', () => {
@@ -277,6 +281,96 @@ describe('applyNationBuilder', () => {
     const [added] = applyNationBuilder([], newPlan, DETAIL_FIELDS);
 
     expect(added!.username).toMatch(/^ref-[a-z0-9]{8}$/);
+  });
+});
+
+describe('NationBuilder ids', () => {
+  const ID_MEMBER_HEADER = `${MEMBER_HEADER},nationbuilderId`;
+
+  it('reads the member import layout with a nationbuilderId column as the member import layout', () => {
+    expect(detectCsvFormat(ID_MEMBER_HEADER.split(','))).toBe('nb-member');
+  });
+
+  it('matches by NationBuilder id before email, so a changed email in NationBuilder still finds the person', () => {
+    const known = person('Macc1', { name: 'Jane Example', email: 'old@example.org', nbId: '12345', code: 'ref-nb12345' });
+    const rows = parseCsvRows(`${ID_MEMBER_HEADER}
+Jane Example,,,,new@example.org,,,12345
+`);
+
+    const plan = planNationBuilderImport(rows, 'nb-member', [known]);
+
+    expect(plan.matched).toEqual([{ row: 2, username: 'Macc1', name: 'Jane Example', changes: [], nbId: '12345', previousNbId: '12345' }]);
+    expect(plan.newPeople).toEqual([]);
+  });
+
+  it('counts a matched person with a new NationBuilder id as changed, with no ticked field changed', () => {
+    const rows = parseCsvRows(`${ID_MEMBER_HEADER}
+Jane Example,,,,jane@example.org,07700 900001,,12345
+`);
+
+    const plan = planNationBuilderImport(rows, 'nb-member', [jane]);
+
+    expect(plan.matched[0]).toMatchObject({ changes: [], nbId: '12345', previousNbId: '' });
+    expect(countMatches(plan, [])).toEqual({ changed: 1, upToDate: 0 });
+  });
+
+  it('reads the id column of the "All columns" layout', () => {
+    const rows = parseCsvRows(`${ALL_HEADER}
+9,Jane Example,jane@example.org
+`);
+
+    expect(planNationBuilderImport(rows, 'nb-all', [jane]).matched[0]).toMatchObject({ nbId: '9', previousNbId: '' });
+  });
+
+  it.each([['abc'], ['12.5'], ['-3'], ['']])('ignores the id %j, which is not a whole number', (id) => {
+    const rows = parseCsvRows(`${ID_MEMBER_HEADER}
+Jane Example,,,,jane@example.org,,,${id}
+`);
+
+    expect(planNationBuilderImport(rows, 'nb-member', [jane]).matched[0]).toMatchObject({ nbId: '' });
+  });
+
+  it('skips a second row with the same NationBuilder id as a duplicate', () => {
+    const rows = parseCsvRows(`${ID_MEMBER_HEADER}
+A,,,,a@example.org,,,7
+B,,,,b@example.org,,,7
+`);
+
+    const plan = planNationBuilderImport(rows, 'nb-member', []);
+
+    expect(plan.newPeople.map((p) => p.row)).toEqual([2]);
+    expect(plan.duplicate).toEqual([{ row: 3, reason: 'duplicate', label: 'b@example.org' }]);
+  });
+
+  it('writes the id and the code ref-nb<id> on a matched person, whatever the ticked fields, and replaces the old code', () => {
+    const coded = { ...jane, code: 'ref-k3m9q2xa' };
+    const rows = parseCsvRows(`${ID_MEMBER_HEADER}
+Jane Example,,,,jane@example.org,,,12345
+`);
+    const plan = planNationBuilderImport(rows, 'nb-member', [coded]);
+
+    expect(applyNationBuilder([coded], plan, [])).toEqual([{ ...coded, nbId: '12345', code: 'ref-nb12345' }]);
+  });
+
+  it('adds a new person with ref-nb<id> as the username and the code', () => {
+    const rows = parseCsvRows(`${ID_MEMBER_HEADER}
+Nina New,,,,nina@example.org,,,555
+`);
+    const plan = planNationBuilderImport(rows, 'nb-member', []);
+
+    expect(applyNationBuilder([], plan, ['name'], () => 'ref-aaaaaaaa')).toEqual([
+      { ...emptyPerson('ref-nb555'), email: 'nina@example.org', name: 'Nina New', firstName: 'Nina', lastName: 'New', nbId: '555', code: 'ref-nb555' },
+    ]);
+  });
+
+  it('skips a new person whose NationBuilder id was added to the list after the preview', () => {
+    const rows = parseCsvRows(`${ID_MEMBER_HEADER}
+Nina New,,,,nina@example.org,,,555
+`);
+    const plan = planNationBuilderImport(rows, 'nb-member', []);
+    const already = person('macc9', { email: 'other@example.org', nbId: '555', code: 'ref-nb555' });
+
+    expect(applyNationBuilder([already], plan, DETAIL_FIELDS)).toEqual([already]);
   });
 });
 
@@ -335,7 +429,7 @@ describe('applyCsv', () => {
 `;
 
     expect(applyCsv(text, [jane, bob], ['name'])).toEqual({
-      people: [{ ...jane, name: 'Jane A. Example', firstName: 'Jane', lastName: 'A. Example' }, bob],
+      people: [{ ...jane, name: 'Jane A. Example', firstName: 'Jane', lastName: 'A. Example', nbId: '9', code: 'ref-nb9' }, bob],
       result: { kind: 'nationbuilder', added: 0, updated: 1, unchanged: 0, skipped: [] },
     });
   });

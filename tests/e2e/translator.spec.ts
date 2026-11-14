@@ -459,4 +459,25 @@ test.describe('NationBuilder import', () => {
 
     await expect(popup.getByTestId('zt-person').filter({ hasText: 'Nina New' })).toHaveAttribute('data-username', 'Macc9');
   });
+
+  test('reads the NationBuilder id: a new person gets ref-nb<id> as the username, and the Edit screen shows the id', async ({ context, extensionId }) => {
+    const popup = await setUpWithPeople(context, extensionId);
+    const csv = ['name,address,postcode,area,email,phone,joinDate,nationbuilderId', 'Nina New,1 New St,NN1 1NN,North,nina@example.org,07700 900007,2020-01-01,555'].join('\n');
+
+    await popup.getByTestId('zt-import').click();
+    await popup.getByTestId('zt-import-file').setInputFiles({ name: 'nationbuilder.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
+    await expect(popup.getByTestId('zt-import-count-new-people-no-username-yet')).toContainText('1');
+    await popup.getByTestId('zt-import-review').click();
+    await expect(popup.getByTestId('zt-import-change')).toContainText('NationBuilder ID');
+    await expect(popup.getByTestId('zt-import-change')).toContainText('555');
+    await popup.getByTestId('zt-import-confirm').click();
+    await expect(popup.getByTestId('zt-result-added')).toContainText('1');
+    await popup.getByTestId('zt-import-done').click();
+
+    const added = popup.getByTestId('zt-person').filter({ hasText: 'Nina New' });
+    await expect(added).toHaveAttribute('data-username', 'ref-nb555');
+    await added.click();
+    await expect(popup.getByTestId('zt-edit')).toContainText('NationBuilder ID');
+    await expect(popup.getByTestId('zt-edit')).toContainText('ref-nb555');
+  });
 });

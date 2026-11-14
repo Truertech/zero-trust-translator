@@ -60,6 +60,18 @@ describe('ensureCoded', () => {
     expect(people[0]!.code).toBe('ref-k3m9q2xa');
   });
 
+  it('gives a person with a NationBuilder id the code ref-nb<id>, before a `ref-` username and the history', () => {
+    const { people } = ensureCoded([person('ref-k3m9q2xa', { email: 'jane@example.org', nbId: '12345' })], { 'jane@example.org': 'ref-oldcode1' });
+    expect(people[0]!.code).toBe('ref-nb12345');
+  });
+
+  it('reads a person saved before nbId existed as a person with no NationBuilder id', () => {
+    const saved = { ...person('Macc1', { email: 'jane@example.org' }) } as Partial<PersonRecord>;
+    delete saved.nbId;
+    const { people } = ensureCoded([saved as PersonRecord], { 'jane@example.org': 'ref-oldcode1' });
+    expect(people[0]!.code).toBe('ref-oldcode1');
+  });
+
   it('gives a person the code the history holds for the email, compared trimmed and lower-case', () => {
     const { people } = ensureCoded([person('Macc1', { email: ' Jane@Example.org ' })], { 'jane@example.org': 'ref-oldcode1' });
     expect(people[0]!.code).toBe('ref-oldcode1');
@@ -89,6 +101,20 @@ describe('resolveCodeConflicts', () => {
   it('takes the username as the source of truth: a `ref-` username replaces a different code', () => {
     const { people } = resolveCodeConflicts([person('ref-k3m9q2xa', { code: 'ref-other123' })]);
     expect(people[0]!.code).toBe('ref-k3m9q2xa');
+  });
+
+  it('takes the NationBuilder id as the source of truth: ref-nb<id> replaces a random code and a `ref-` username', () => {
+    const { people } = resolveCodeConflicts([
+      person('Macc1', { code: 'ref-k3m9q2xa', nbId: '12345' }),
+      person('ref-wipe0001', { code: 'ref-wipe0001', nbId: '777' }),
+    ]);
+    expect(people.map((p) => p.code)).toEqual(['ref-nb12345', 'ref-nb777']);
+  });
+
+  it('the person whose NationBuilder id gives the code keeps it, even when listed after the other', () => {
+    fills.push(1);
+    const { people } = resolveCodeConflicts([person('Macc1', { code: 'ref-nb12345' }), person('Macc2', { code: 'ref-other123', nbId: '12345' })]);
+    expect(people.map((p) => p.code)).toEqual([codeOf(1), 'ref-nb12345']);
   });
 
   it('when two people hold the same code and neither username is that code, the first keeps it and the second gets a new code', () => {
