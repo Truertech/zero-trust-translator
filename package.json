@@ -1,6 +1,6 @@
 {
   "name": "zero-trust-translator",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "private": true,
   "description": "Offline Chrome extension that maps Zero Trust usernames to real names, on the admin's own computer only.",
   "engines": {
