@@ -38,10 +38,14 @@ function devKeys(): Record<string, WalledKey> {
 
 /**
  * The production and staging keys: the public half of walled Key 1
- * (`alias/walled-sms-batch`, RSA-4096) of each environment. Production has
- * no entry until its walled stack is deployed and publishes a key.
+ * (`alias/walled-sms-batch`, RSA-4096) of each environment.
  */
 const PINNED_KEYS_BY_HOST: Record<string, WalledKey> = {
+  'rb-branch.org.uk': {
+    keyId: 'walled-sms-batch-production',
+    publicKeySpki:
+      'MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAwl+lda2o6Ik06OTfAEl9Bu9MQd4ou+sm3QQR2njlGMjFdwzmSRzs0iXxvlzCTm7r4xVYtL9JFYlCJo6gZ8pYOKRZLtPWLmSCmdRv9pIJhkbGM4ASRwszfrJMTSxFDnmiLjQgmA1Fi0Zq8iFfeErJKE/bfP5eiu7k8AGLhRaV78hy+bcv+aDMc80SAI9X9aJ+oNawSzG4RMp9qqyY/yiQPaN+6dAGch9fifzdWR6113uHewxfQp8EhGWid57ubA/qB5pipPT59Um5ctjkb2PvkAOp4PEuVwapDH8EqBzUbfSF5txygld/LSq5YODfB8p2yeh64M2SHJ4Hzk/jD0vFIWmYrXsUA83PLOGftDrIxlOhlLCwIKWGLPt1y/Dpjvyy+9QCJjb4OAfm1I7Iak2MIniuQGIX845Epv5pcKm4klLZ7Ursj6HvWdrW3DJ5muODXnCci4LFhOkhN0xphD9s5AuicVoe8cRJpuJTSz0ShB+bPZKpmY2aRw+RF6pnd3C3sQbdd7TNEfo9hickRQz9PbSjUjFPJjm9/h89hfnaIRT+QSRubGXL+Txq6TP1nHcHvmWji6/6JMiHmtnXpMVbyPpCfp+p0yG0EPFIyqL/6dcb9aE91gIffx/rYbnEJ0TnPPbSpBwPqbnEl1yEsrFzyELBSJGAl8BrOijVLmht4z8CAwEAAQ==',
+  },
   'rb-branch-staging.org.uk': {
     keyId: 'walled-sms-batch-staging',
     publicKeySpki:
