@@ -5,6 +5,7 @@ import {
   applyCsv,
   applyNationBuilder,
   changesFor,
+  consentChanges,
   countMatches,
   detectCsvFormat,
   isBackupText,
@@ -117,6 +118,8 @@ describe('planNationBuilderImport', () => {
           ],
           nbId: '',
           previousNbId: '',
+          consent: null,
+          previousConsent: null,
         },
       ],
       newPeople: [],
@@ -134,7 +137,7 @@ describe('planNationBuilderImport', () => {
   it('does not let the email default for a missing name overwrite the name', () => {
     const rows = parseCsvRows(`${MEMBER_HEADER}\nJane@Example.org,Unknown,UNKNOWN,,jane@example.org,,\n`);
 
-    expect(planNationBuilderImport(rows, 'nb-member', [jane]).matched).toEqual([{ row: 2, username: 'Macc1', name: 'Jane Example', changes: [], nbId: '', previousNbId: '' }]);
+    expect(planNationBuilderImport(rows, 'nb-member', [jane]).matched).toEqual([{ row: 2, username: 'Macc1', name: 'Jane Example', changes: [], nbId: '', previousNbId: '', consent: null, previousConsent: null }]);
   });
 
   it('reads the cells past the end of a short row as empty', () => {
@@ -170,7 +173,7 @@ describe('planNationBuilderImport', () => {
       { row: 4, reason: 'no email', label: 'Not An Email' },
     ]);
     expect(plan.newPeople).toEqual([
-      { row: 5, email: 'stranger@example.org', values: { name: 'Stranger', phone: '07700 900009', address: '9 Far Lane', postcode: 'ZZ1 1ZZ' }, nbId: '' },
+      { row: 5, email: 'stranger@example.org', values: { name: 'Stranger', phone: '07700 900009', address: '9 Far Lane', postcode: 'ZZ1 1ZZ' }, nbId: '', consent: null },
     ]);
     expect(plan.duplicate).toEqual([
       { row: 6, reason: 'duplicate', label: 'jane@example.org' },
@@ -299,7 +302,7 @@ Jane Example,,,,new@example.org,,,12345
 
     const plan = planNationBuilderImport(rows, 'nb-member', [known]);
 
-    expect(plan.matched).toEqual([{ row: 2, username: 'Macc1', name: 'Jane Example', changes: [], nbId: '12345', previousNbId: '12345' }]);
+    expect(plan.matched).toEqual([{ row: 2, username: 'Macc1', name: 'Jane Example', changes: [], nbId: '12345', previousNbId: '12345', consent: null, previousConsent: null }]);
     expect(plan.newPeople).toEqual([]);
   });
 
@@ -454,5 +457,66 @@ describe('applyCsv', () => {
       ],
       result: { kind: 'people', added: 1, updated: 1, unchanged: 1, skipped: [{ row: 5, reason: 'no username', label: 'Nobody' }] },
     });
+  });
+});
+
+describe('NationBuilder consent columns', () => {
+  const HEADER = 'name,address,postcode,area,email,phone,joinDate,nationbuilderId,emailOptIn,smsOptIn,doNotContact,doNotCall,emailBad,mobileBad';
+  const jane = (): PersonRecord => ({ ...emptyPerson('Macc1'), email: 'jane@example.org', name: 'Jane Example' });
+
+  it('the member import layout with consent columns is still detected as nb-member', () => {
+    expect(detectCsvFormat(HEADER.split(','))).toBe('nb-member');
+  });
+
+  it('plans the row consent for a matched person and for a new person', () => {
+    const rows = parseCsvRows([
+      HEADER,
+      'Jane Example,,,,jane@example.org,,2026-01-01,,true,false,false,false,false,false',
+      'New Person,,,,new@example.org,,2026-01-01,,false,true,true,false,false,false',
+    ].join('\n'));
+    const plan = planNationBuilderImport(rows, 'nb-member', [jane()]);
+    expect(plan.matched[0]).toMatchObject({
+      consent: { emailOptIn: true, smsOptIn: false, doNotContact: false, doNotCall: false, emailBad: false, mobileBad: false },
+      previousConsent: null,
+    });
+    expect(plan.newPeople[0]!.consent).toEqual({ emailOptIn: false, smsOptIn: true, doNotContact: true, doNotCall: false, emailBad: false, mobileBad: false });
+  });
+
+  it('writes the consent whatever fields are ticked, and counts a consent change as a change', () => {
+    const rows = parseCsvRows([HEADER, 'Jane Example,,,,jane@example.org,,2026-01-01,,true,false,,,,'].join('\n'));
+    const plan = planNationBuilderImport(rows, 'nb-member', [jane()]);
+    expect(consentChanges(plan.matched[0]!)).toBe(true);
+    expect(countMatches(plan, [])).toEqual({ changed: 1, upToDate: 0 });
+    const after = applyNationBuilder([jane()], plan, []);
+    expect(after[0]!.consent).toEqual({ emailOptIn: true, smsOptIn: false });
+  });
+
+  it('the same consent again is up to date', () => {
+    const current = { ...jane(), consent: { emailOptIn: true, smsOptIn: false } };
+    const rows = parseCsvRows([HEADER, 'Jane Example,,,,jane@example.org,,2026-01-01,,true,false,,,,'].join('\n'));
+    const plan = planNationBuilderImport(rows, 'nb-member', [current]);
+    expect(consentChanges(plan.matched[0]!)).toBe(false);
+    expect(countMatches(plan, [])).toEqual({ changed: 0, upToDate: 1 });
+  });
+
+  it('a row with no consent column keeps the consent the person has', () => {
+    const current = { ...jane(), consent: { smsOptIn: false } };
+    const rows = parseCsvRows(['name,address,postcode,area,email,phone,joinDate,nationbuilderId', 'Jane Example,,,,jane@example.org,,2026-01-01,'].join('\n'));
+    const plan = planNationBuilderImport(rows, 'nb-member', [current]);
+    expect(plan.matched[0]!.consent).toBeNull();
+    expect(consentChanges(plan.matched[0]!)).toBe(false);
+    expect(applyNationBuilder([current], plan, [])[0]!.consent).toEqual({ smsOptIn: false });
+  });
+
+  it('a new person with consent gets it, and one with none gets no consent key', () => {
+    const rows = parseCsvRows([
+      HEADER,
+      'Ann,,,,ann@example.org,,2026-01-01,,,false,,,,',
+      'Bea,,,,bea@example.org,,2026-01-01,,,,,,,',
+    ].join('\n'));
+    const plan = planNationBuilderImport(rows, 'nb-member', []);
+    const after = applyNationBuilder([], plan, [...DETAIL_FIELDS], () => 'ref-test0001');
+    expect(after.find((p) => p.email === 'ann@example.org')!.consent).toEqual({ smsOptIn: false });
+    expect(after.find((p) => p.email === 'bea@example.org')).not.toHaveProperty('consent');
   });
 });

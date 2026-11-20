@@ -19,6 +19,7 @@
  * and then make the same plan again when the admin confirms it.
  */
 import { newCode } from './code';
+import { consentFromCells, sameConsent, type ContactConsent } from './consent';
 import { normaliseHeader, parseCsvRows, parsePeopleRows } from './csv';
 import {
   DETAIL_FIELDS,
@@ -125,6 +126,10 @@ export interface NbMatch {
   nbId: string;
   /** The person's NationBuilder id before the import, or `''`. */
   previousNbId: string;
+  /** The row's contact consent, or null when the row has no consent column set. Always written, like the id. */
+  consent: ContactConsent | null;
+  /** The person's contact consent before the import. */
+  previousConsent: ContactConsent | null;
 }
 
 /** One row that matches nobody in the list: a new person, with the row's values. */
@@ -134,11 +139,18 @@ export interface NbNew {
   values: Record<DetailField, string>;
   /** The row's NationBuilder id, or `''` when the row has none. */
   nbId: string;
+  /** The row's contact consent, or null when the row has no consent column set. */
+  consent: ContactConsent | null;
 }
 
 /** Whether the import writes a new NationBuilder id on the matched person. Not a ticked field: it is always written. */
 export function nbIdChanges(match: NbMatch): boolean {
   return match.nbId !== '' && match.nbId !== match.previousNbId;
+}
+
+/** Whether the import writes new contact consent on the matched person. Not a ticked field: it is always written. */
+export function consentChanges(match: NbMatch): boolean {
+  return match.consent !== null && !sameConsent(match.consent, match.previousConsent);
 }
 
 export interface NbPlan {
@@ -219,9 +231,10 @@ export function planNationBuilderImport(rows: string[][], format: 'nb-member' | 
       address: realValue(address, email),
       postcode: realValue(cell(cells, 'postcode'), email),
     };
+    const consent = consentFromCells(header, cells);
     const person = (nbId !== '' ? byNbId.get(nbId) : undefined) ?? byEmail.get(email);
     if (!person) {
-      plan.newPeople.push({ row, email, values: incoming, nbId });
+      plan.newPeople.push({ row, email, values: incoming, nbId, consent });
       continue;
     }
     const changes: FieldChange[] = [];
@@ -230,7 +243,10 @@ export function planNationBuilderImport(rows: string[][], format: 'nb-member' | 
         changes.push({ field, from: person[field], to: incoming[field] });
       }
     }
-    plan.matched.push({ row, username: person.username, name: person.name, changes, nbId, previousNbId: nbIdOf(person) });
+    plan.matched.push({
+      row, username: person.username, name: person.name, changes, nbId, previousNbId: nbIdOf(person),
+      consent, previousConsent: person.consent ?? null,
+    });
   }
   return plan;
 }
@@ -242,7 +258,7 @@ export function changesFor(match: NbMatch, fields: readonly DetailField[]): Fiel
 
 /** The matched rows split into "Name or details change" and "Already up to date", for the ticked fields. */
 export function countMatches(plan: NbPlan, fields: readonly DetailField[]): { changed: number; upToDate: number } {
-  const changed = plan.matched.filter((m) => changesFor(m, fields).length > 0 || nbIdChanges(m)).length;
+  const changed = plan.matched.filter((m) => changesFor(m, fields).length > 0 || nbIdChanges(m) || consentChanges(m)).length;
   return { changed, upToDate: plan.matched.length - changed };
 }
 
@@ -278,6 +294,9 @@ export function applyNationBuilder(current: PersonRecord[], plan: NbPlan, fields
       person.nbId = match.nbId;
       person.code = nationBuilderCode(match.nbId);
     }
+    if (match.consent !== null) {
+      person.consent = match.consent;
+    }
   }
   const emails = new Set(people.map((p) => emailKey(p.email)).filter((e) => e !== ''));
   const nbIds = new Set(people.map(nbIdOf).filter((id) => id !== ''));
@@ -290,7 +309,13 @@ export function applyNationBuilder(current: PersonRecord[], plan: NbPlan, fields
     if (nbCode !== '') {
       nbIds.add(entry.nbId);
     }
-    const added: PersonRecord = { ...emptyPerson(nbCode || mint()), email: entry.email, nbId: nbCode ? entry.nbId : '', code: nbCode };
+    const added: PersonRecord = {
+      ...emptyPerson(nbCode || mint()),
+      email: entry.email,
+      nbId: nbCode ? entry.nbId : '',
+      code: nbCode,
+      ...(entry.consent ? { consent: entry.consent } : {}),
+    };
     for (const field of fields) {
       added[field] = entry.values[field];
     }

@@ -36,6 +36,7 @@ import {
   type StateView,
 } from './messages';
 import { passwordAccepted } from './password';
+import { canText } from './consent';
 import { normaliseUkMobile } from './phone-number';
 import { encryptBatch } from './send-crypto';
 import { LEGACY_STORAGE_KEY, ListError, addPerson, peopleFromLegacy, removePerson, renameUser, sortPeople } from './store';
@@ -771,7 +772,10 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
         codes: list.map((p) => ({
           code: p.code,
           username: isRefCode(usernameKey(p.username)) ? '' : p.username,
-          hasValidMobile: normaliseUkMobile(p.phone) !== null,
+          // False for a person NationBuilder consent bars from texts, as for a
+          // person with no UK mobile: the page cannot pick them, and the batch
+          // below leaves them out (src/consent.ts canText).
+          hasValidMobile: canText(p),
         })),
       };
     });
@@ -880,13 +884,14 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
     }
     // The window shows how many of `codes` the batch will hold, never the
     // page's own claim: a page cannot inflate the count the admin sees. A
-    // code the list does not hold and a code with no valid UK mobile are
-    // both left out, the same as `encryptForSendOutcome`.
+    // code the list does not hold, a code with no valid UK mobile and a code
+    // whose NationBuilder consent bars texts are all left out, the same as
+    // `encryptForSendOutcome`.
     const list = await smsPeople(fromBase64(open.dataKey), current);
     const byCode = new Map(list.map((p) => [p.code, p]));
     const matchedCount = codes.filter((code) => {
       const person = byCode.get(code);
-      return person !== undefined && normaliseUkMobile(person.phone) !== null;
+      return person !== undefined && canText(person);
     }).length;
     const view: AllowRequestView = {
       operation,
@@ -947,7 +952,7 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
     const rows: SendRow[] = [];
     for (const code of entry.codes) {
       const person = byCode.get(code);
-      const phone = person ? normaliseUkMobile(person.phone) : null;
+      const phone = person && canText(person) ? normaliseUkMobile(person.phone) : null;
       if (person && phone) {
         rows.push({ code, phone, firstName: person.firstName });
       }

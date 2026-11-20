@@ -1,3 +1,5 @@
+import type { ContactConsent } from './consent';
+
 /** What a person is on the branch platform, as `people.csv` writes it. Empty when the file did not say. */
 export type PersonKind = 'user' | 'member' | 'respondent' | '';
 
@@ -28,6 +30,12 @@ export interface PersonRecord {
   firstName: string;
   lastName: string;
   nbId: string;
+  /**
+   * The person's contact consent from the last NationBuilder Export import
+   * that carried it (src/consent.ts). Absent on a record saved before this
+   * field, and on a person no import gave consent: texts are allowed.
+   */
+  consent?: ContactConsent;
 }
 
 /** The fields an import can change. The username never changes by import. */

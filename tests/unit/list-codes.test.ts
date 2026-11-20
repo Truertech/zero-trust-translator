@@ -465,3 +465,44 @@ describe('zt:encryptForSend reserves the Allow slot at once', () => {
     expect(await next).toEqual({ refused: 'denied' });
   });
 });
+
+describe('NationBuilder consent bars texts (src/consent.ts)', () => {
+  let w: World;
+
+  // Bob (Macc2) has "Receive text messages" off in NationBuilder; Jane (Macc1) has it on.
+  const NB_CONSENT_CSV = [
+    'name,address,postcode,area,email,phone,joinDate,nationbuilderId,emailOptIn,smsOptIn,doNotContact,doNotCall,emailBad,mobileBad',
+    'Jane Example,1 High Street,AB1 2CD,North,jane@example.org,07700 900123,2026-01-01,,true,true,false,false,false,false',
+    'Bob Stone,2 Low Road,ZZ1 1ZZ,North,bob@example.org,07700 900456,2026-01-01,,true,false,false,false,false,false',
+  ].join('\n');
+
+  beforeEach(async () => {
+    w = world();
+    await setUp(w);
+    expectOk(await w.send({ type: 'applyImport', text: NB_CONSENT_CSV, fields: [] }));
+  }, SLOW);
+
+  it('lists a person NationBuilder consent bars from texts with hasValidMobile false', async () => {
+    const codes = codesOf(await w.send<ListCodesResult>({ type: 'zt:listCodes' }));
+    expect(byUsername(codes, 'Macc1')).toMatchObject({ hasValidMobile: true });
+    expect(byUsername(codes, 'Macc2')).toMatchObject({ hasValidMobile: false });
+  });
+
+  it('leaves that person out of the Allow count and out of the batch', async () => {
+    const codes = codesOf(await w.send<ListCodesResult>({ type: 'zt:listCodes' }));
+    const pending = w.send<EncryptForSendResult>({
+      type: 'zt:encryptForSend', operation: 'Send SMS messages',
+      codes: [byUsername(codes, 'Macc1').code, byUsername(codes, 'Macc2').code], peopleCount: 2, origin: PAGE_ORIGIN,
+    });
+    await vi.waitFor(() => expect(w.chrome.windowsCreated.length).toBeGreaterThan(0));
+    const requestId = new URL(w.chrome.windowsCreated[0]!.url).searchParams.get('requestId')!;
+    const { request } = expectOk(await w.send({ type: 'zt:getAllowRequest', requestId }, ALLOW_SENDER)) as { request: AllowRequestView };
+    expect(request.peopleCount).toBe(1);
+    expectOk(await w.send({ type: 'zt:resolveAllow', requestId, decision: 'allow' }, ALLOW_SENDER));
+    const result = await pending;
+    if (!('batch' in result)) {
+      throw new Error(`expected a batch, got ${JSON.stringify(result)}`);
+    }
+    expect((await decryptBatch(result.batch)).rows.map((r) => r.firstName)).toEqual(['Jane']);
+  });
+});

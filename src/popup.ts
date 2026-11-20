@@ -4,7 +4,8 @@
  * (`background.ts`), which holds the data key while the list is unlocked.
  */
 import { isRefCode } from './code';
-import { countMatches, isBackupText, nbIdChanges, type CsvPreview, type ImportResult, type NbPlan } from './import';
+import { consentChanges, countMatches, isBackupText, nbIdChanges, type CsvPreview, type ImportResult, type NbPlan } from './import';
+import { consentLabel } from './consent';
 import { PASSWORD_LOCKOUT_MS, type SecretMessage, type StateView } from './messages';
 import { passwordForm } from './password-form';
 import { searchPeople } from './store';
@@ -907,6 +908,7 @@ function changedMatches(plan: NbPlan, fields: DetailField[]): { username: string
       name: m.name,
       changes: [
         ...(nbIdChanges(m) ? [{ label: NB_ID_LABEL, from: m.previousNbId, to: m.nbId }] : []),
+        ...(consentChanges(m) ? [{ label: 'Consent', from: consentLabel(m.previousConsent), to: consentLabel(m.consent) }] : []),
         ...m.changes.filter((c) => fields.includes(c.field)).map((c) => ({ label: FIELD_LABELS[c.field], from: c.from, to: c.to })),
       ],
     }))
