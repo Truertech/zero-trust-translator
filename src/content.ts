@@ -62,7 +62,8 @@ const MARKER_STYLE = `
 const BADGE_STYLE = `
 #b { position: fixed; top: 12px; right: 12px; z-index: 2147483647; display: none; align-items: center; gap: 8px; font: 12px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; border-radius: 999px; padding: 5px 12px; box-shadow: 0 1px 3px rgba(22,24,29,.12); }
 #b.unlocked { display: inline-flex; color: #0B4F49; background: #E6F2EF; border: 1px solid #BFDCD6; }
-#b.locked { display: inline-flex; color: #454B54; background: #fff; border: 1px solid #D5D2CA; }
+#b.locked { display: inline-flex; color: #454B54; background: #fff; border: 1px solid #D5D2CA; cursor: pointer; }
+#b.locked:hover { border-color: #0F766E; color: #0B4F49; }
 #b .lock, #b .shield { display: none; }
 #b.locked .lock, #b.unlocked .shield { display: inline-flex; }
 #t::before { content: attr(data-zt-text); }
@@ -151,7 +152,14 @@ function ensureBadge(): NonNullable<typeof badge> {
   const shadow = host.attachShadow({ mode: 'closed' });
   shadow.innerHTML = `<style>${BADGE_STYLE}</style><span id="b" role="status"><span class="shield">${SHIELD_CHECK_SVG}</span><span class="lock">${LOCK_SVG}</span><span id="t"></span></span>`;
   document.documentElement.append(host);
-  badge = { host, box: shadow.getElementById('b') as HTMLSpanElement, text: shadow.getElementById('t') as HTMLSpanElement };
+  const box = shadow.getElementById('b') as HTMLSpanElement;
+  // A click on the locked badge opens the unlock screen. Nothing opens without a click.
+  box.addEventListener('click', () => {
+    if (box.classList.contains('locked')) {
+      void chrome.runtime.sendMessage({ type: 'zt:openUnlock' }).catch(() => undefined);
+    }
+  });
+  badge = { host, box, text: shadow.getElementById('t') as HTMLSpanElement };
   return badge;
 }
 
@@ -159,7 +167,7 @@ function badgeText(phase: NamesResponse['phase'], shown: number, total: number):
   if (phase === 'unlocked') {
     return `Names shown by Zero Trust Translator · ${shown} of ${total} on this page`;
   }
-  return 'Zero Trust Translator is locked · open the extension to unlock';
+  return 'Zero Trust Translator is locked · Unlock';
 }
 
 function renderBadge(phase: NamesResponse['phase'], shown: number, total: number): void {
@@ -172,6 +180,7 @@ function renderBadge(phase: NamesResponse['phase'], shown: number, total: number
   const current = ensureBadge();
   const text = badgeText(phase, shown, total);
   current.box.className = phase === 'unlocked' ? 'unlocked' : 'locked';
+  current.box.setAttribute('role', phase === 'unlocked' ? 'status' : 'button');
   current.text.setAttribute('data-zt-text', text);
   current.box.setAttribute('aria-label', text);
 }
@@ -231,7 +240,7 @@ function touchesMarkers(mutations: MutationRecord[]): boolean {
 }
 
 /**
- * `zt:listCodes` and `zt:encryptForSend`: the page cannot call
+ * `zt:listCodes`, `zt:encryptForSend` and `zt:openUnlock`: the page cannot call
  * `chrome.runtime.sendMessage` itself (only an extension's own scripts can),
  * so it asks by `window.postMessage` and this script relays the one request
  * to the service worker and the one answer back. `origin` is added here,
@@ -255,7 +264,7 @@ function isPageRequestEnvelope(data: unknown): data is PageRequestEnvelope {
     typeof value.requestId === 'string' &&
     !!value.request &&
     typeof value.request === 'object' &&
-    (value.request.type === 'zt:listCodes' || value.request.type === 'zt:encryptForSend')
+    (value.request.type === 'zt:listCodes' || value.request.type === 'zt:encryptForSend' || value.request.type === 'zt:openUnlock')
   );
 }
 

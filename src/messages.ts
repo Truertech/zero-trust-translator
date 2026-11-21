@@ -100,6 +100,7 @@ export type Request =
   | { type: 'setSettings'; autoLockMinutes?: number; lockWhenPcLocks?: boolean }
   | { type: 'lookupNames'; ids: string[] }
   | { type: 'zt:listCodes' }
+  | { type: 'zt:openUnlock' }
   | { type: 'zt:encryptForSend'; operation: string; codes: string[]; peopleCount: number; origin: string }
   | { type: 'zt:getAllowRequest'; requestId: string }
   | { type: 'zt:resolveAllow'; requestId: string; decision: 'allow' | 'deny' };

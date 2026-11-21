@@ -138,28 +138,31 @@ describe('zt:listCodes', () => {
     expect(after.map((c) => c.code).sort()).toEqual(before.map((c) => c.code).sort());
   });
 
-  it('refuses while the list is locked, and opens the toolbar popup over the page so the admin can unlock', async () => {
+  it('refuses while the list is locked, and opens nothing by itself', async () => {
     await lock(w);
     const result = await w.send<ListCodesResult>({ type: 'zt:listCodes' });
     expect(result).toEqual({ refused: 'locked' });
-    expect(w.chrome.popupsOpened).toBe(1);
-    expect(w.chrome.created).not.toContainEqual(expect.stringContaining('popup.html'));
+    expect(w.chrome.popupsOpened).toBe(0);
+    expect(w.chrome.created).toEqual([]);
   });
 
-  it('opens the popup page in a tab when Chrome cannot open the toolbar popup', async () => {
+  it('zt:openUnlock opens the toolbar popup over the page', async () => {
     await lock(w);
+    expect(await w.send({ type: 'zt:openUnlock' })).toEqual({ opened: true });
+    expect(w.chrome.popupsOpened).toBe(1);
+    expect(w.chrome.created).toEqual([]);
+  });
+
+  it('zt:openUnlock opens the popup page in a tab when Chrome cannot open the toolbar popup', async () => {
     w.chrome.popupFails = true;
-    const result = await w.send<ListCodesResult>({ type: 'zt:listCodes' });
-    expect(result).toEqual({ refused: 'locked' });
+    expect(await w.send({ type: 'zt:openUnlock' })).toEqual({ opened: true });
     expect(w.chrome.popupsOpened).toBe(0);
     expect(w.chrome.created).toContainEqual(expect.stringContaining('popup.html'));
   });
 
-  it('opens the popup page in a tab on a Chrome with no action.openPopup', async () => {
-    await lock(w);
+  it('zt:openUnlock opens the popup page in a tab on a Chrome with no action.openPopup', async () => {
     delete (w.chrome.api.action as { openPopup?: unknown }).openPopup;
-    const result = await w.send<ListCodesResult>({ type: 'zt:listCodes' });
-    expect(result).toEqual({ refused: 'locked' });
+    expect(await w.send({ type: 'zt:openUnlock' })).toEqual({ opened: true });
     expect(w.chrome.created).toContainEqual(expect.stringContaining('popup.html'));
   });
 
@@ -206,6 +209,8 @@ describe('zt:encryptForSend', () => {
     });
     expect(result).toEqual({ refused: 'locked' });
     expect(w.chrome.windowsCreated).toHaveLength(0);
+    expect(w.chrome.popupsOpened).toBe(0);
+    expect(w.chrome.created).toEqual([]);
   });
 
   it('shows the Allow window the count of codes the list holds, not the count the page claims', async () => {

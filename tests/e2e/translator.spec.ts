@@ -9,7 +9,7 @@ import type { EncryptForSendResult, ListCodesResult, Request, SendBatch } from '
 
 const PEOPLE_CSV = join(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'people.csv');
 const PASSWORD = 'violet harbour lantern 47';
-const LOCKED_TEXT = 'Zero Trust Translator is locked · open the extension to unlock';
+const LOCKED_TEXT = 'Zero Trust Translator is locked · Unlock';
 
 async function openPopup(context: BrowserContext, extensionId: string): Promise<Page> {
   const popup = await context.newPage();

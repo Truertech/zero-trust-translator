@@ -754,11 +754,13 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
    * screen the same way.
    */
   /**
-   * Shows the admin the unlock screen when a page asks for the list while it
-   * is locked. The toolbar popup opens over the page the admin is on, so the
-   * admin stays on that page. When Chrome cannot open the popup (no focused
-   * browser window, or a Chrome older than 127), the popup page opens in a
-   * new tab instead.
+   * Shows the admin the unlock screen. It runs only when the admin asks:
+   * `zt:openUnlock`, sent when the admin clicks Unlock on the platform page
+   * or on the locked badge. A locked `zt:listCodes` or `zt:encryptForSend`
+   * opens nothing by itself: a window that opens with no click is jarring.
+   * The toolbar popup opens over the page the admin is on. When Chrome
+   * cannot open the popup (no focused browser window, or a Chrome older than
+   * 127), the popup page opens in a new tab instead.
    */
   async function openUnlockEntry(): Promise<void> {
     try {
@@ -784,7 +786,6 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
       const current = await vault();
       const open = current ? await unlocked() : undefined;
       if (!current || !open) {
-        await openUnlockEntry();
         return { refused: 'locked' };
       }
       const list = await smsPeople(fromBase64(open.dataKey), current);
@@ -888,7 +889,6 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
     const current = await vault();
     const open = current ? await unlocked() : undefined;
     if (!current || !open) {
-      await openUnlockEntry();
       return { refused: 'locked' };
     }
     const operation = sendOperationWording(request.operation);
@@ -1064,6 +1064,10 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
       } catch (error) {
         return failure(error);
       }
+    }
+    if (request.type === 'zt:openUnlock') {
+      await openUnlockEntry();
+      return { opened: true };
     }
     if (!fromExtensionPage(sender)) {
       return { ok: false, error: 'forbidden', message: MESSAGES.forbidden } satisfies Failure;
