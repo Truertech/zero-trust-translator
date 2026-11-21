@@ -98,6 +98,10 @@ export class FakeChrome {
   idleListeners: ((state: string) => void)[] = [];
   /** Every `windows.create` call (the Allow window). */
   readonly windowsCreated: { url: string; width: number; height: number }[] = [];
+  /** How many times the toolbar popup was opened. */
+  popupsOpened = 0;
+  /** Set true to make `action.openPopup` throw, as Chrome does with no focused window. */
+  popupFails = false;
   readonly windowsRemoved: number[] = [];
   windowRemovedListeners: ((windowId: number) => void)[] = [];
   private nextWindowId = 1;
@@ -132,6 +136,14 @@ export class FakeChrome {
       create: async (properties: { url: string }) => {
         this.created.push(properties.url);
         return {};
+      },
+    },
+    action: {
+      openPopup: async () => {
+        if (this.popupFails) {
+          throw new Error('Could not find an active browser window.');
+        }
+        this.popupsOpened += 1;
       },
     },
     windows: {

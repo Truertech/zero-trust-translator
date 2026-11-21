@@ -144,6 +144,13 @@ export interface ChromeApi {
     sendMessage(tabId: number, message: unknown): Promise<unknown>;
     create(properties: { url: string }): Promise<unknown>;
   };
+  /**
+   * The toolbar popup. `openPopup` throws when Chrome has no focused browser
+   * window, and is missing before Chrome 127; the caller then opens a tab.
+   */
+  action?: {
+    openPopup?(): Promise<void>;
+  };
   windows: {
     create(createData: { url: string; type: 'popup'; width: number; height: number }): Promise<{ id?: number }>;
     remove(windowId: number): Promise<void>;
@@ -746,7 +753,22 @@ export function createBackground(api: ChromeApi, now: () => number = () => Date.
    * so this opens the extension's own page in a tab, where it renders that
    * screen the same way.
    */
+  /**
+   * Shows the admin the unlock screen when a page asks for the list while it
+   * is locked. The toolbar popup opens over the page the admin is on, so the
+   * admin stays on that page. When Chrome cannot open the popup (no focused
+   * browser window, or a Chrome older than 127), the popup page opens in a
+   * new tab instead.
+   */
   async function openUnlockEntry(): Promise<void> {
+    try {
+      if (api.action?.openPopup) {
+        await api.action.openPopup();
+        return;
+      }
+    } catch {
+      // Falls through to the tab.
+    }
     await api.tabs.create({ url: api.runtime.getURL('popup.html') });
   }
 

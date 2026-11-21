@@ -138,8 +138,26 @@ describe('zt:listCodes', () => {
     expect(after.map((c) => c.code).sort()).toEqual(before.map((c) => c.code).sort());
   });
 
-  it('refuses while the list is locked, and opens the extension page so the admin can unlock', async () => {
+  it('refuses while the list is locked, and opens the toolbar popup over the page so the admin can unlock', async () => {
     await lock(w);
+    const result = await w.send<ListCodesResult>({ type: 'zt:listCodes' });
+    expect(result).toEqual({ refused: 'locked' });
+    expect(w.chrome.popupsOpened).toBe(1);
+    expect(w.chrome.created).not.toContainEqual(expect.stringContaining('popup.html'));
+  });
+
+  it('opens the popup page in a tab when Chrome cannot open the toolbar popup', async () => {
+    await lock(w);
+    w.chrome.popupFails = true;
+    const result = await w.send<ListCodesResult>({ type: 'zt:listCodes' });
+    expect(result).toEqual({ refused: 'locked' });
+    expect(w.chrome.popupsOpened).toBe(0);
+    expect(w.chrome.created).toContainEqual(expect.stringContaining('popup.html'));
+  });
+
+  it('opens the popup page in a tab on a Chrome with no action.openPopup', async () => {
+    await lock(w);
+    delete (w.chrome.api.action as { openPopup?: unknown }).openPopup;
     const result = await w.send<ListCodesResult>({ type: 'zt:listCodes' });
     expect(result).toEqual({ refused: 'locked' });
     expect(w.chrome.created).toContainEqual(expect.stringContaining('popup.html'));
