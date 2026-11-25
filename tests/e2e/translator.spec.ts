@@ -372,21 +372,20 @@ test.describe('send batch', () => {
     const page = await context.newPage();
     await page.goto('/page.html');
 
-    const [result, openedPage] = await Promise.all([
-      postToTranslator<EncryptForSendResult>(page, {
-        type: 'zt:encryptForSend',
-        operation: 'Send SMS messages',
-        codes: ['ref-anything'],
-        peopleCount: 1,
-        origin: 'http://localhost:4321',
-      }),
-      context.waitForEvent('page'),
-    ]);
+    const pagesBefore = context.pages().length;
+    const result = await postToTranslator<EncryptForSendResult>(page, {
+      type: 'zt:encryptForSend',
+      operation: 'Send SMS messages',
+      codes: ['ref-anything'],
+      peopleCount: 1,
+      origin: 'http://localhost:4321',
+    });
 
     expect(result).toEqual({ refused: 'locked' });
-    // The locked refusal opens the extension's own unlock tab, not the
-    // Allow window: that tab is `popup.html`, not `allow.html`.
-    expect(openedPage.url()).toContain('popup.html');
+    // The locked refusal opens nothing by itself: no Allow window and no
+    // unlock tab. The page asks for the unlock popup with zt:openUnlock.
+    await page.waitForTimeout(500);
+    expect(context.pages().length).toBe(pagesBefore);
   });
 
   test('an origin with no pinned key refuses with no Allow window', async ({ context, extensionId, baseURL }) => {
